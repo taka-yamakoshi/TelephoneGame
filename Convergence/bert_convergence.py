@@ -111,12 +111,12 @@ batch_size = 10
 batch_num = 10
 chain_len = 100
 prob_sample = 5
-temp = 0.2
+temp = 1
 sampling_method = 'metropolis'
-sentence_id = 'high_low'
+sentence_id = 'high_low_long'
 
 #Load sentences
-with open(f'high_low_prob_sents_simple.txt','r') as f:
+with open(f'high_low_prob_sents_simple_long.txt','r') as f:
     sentences = f.read().split('\n')[:-1]
 assert len(sentences) == batch_num
 

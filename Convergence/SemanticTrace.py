@@ -8,10 +8,11 @@ import sys
 sys.path.append('..')
 args = sys.argv
 
-sent_id = 0
-temp = 0.2
+sampling_method = args[1]
+sent_id = args[2]
+temp = args[3]
 
-with open(f'datafile/tsne_{sent_id}_{temp}.pkl','rb') as f:
+with open(f'datafile/tsne_{sampling_method}_{sent_id}_{temp}.pkl','rb') as f:
     data = pickle.load(f)
 print(data.shape)
 (batch_num,gen_num,batch_size,dim) = data.shape

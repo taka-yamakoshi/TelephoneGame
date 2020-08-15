@@ -18,14 +18,19 @@ def SentEmbedding(sentence):
     return contentful.vector
 nlp = spacy.load('en_core_web_lg')
 
-sent_id = 0
-temp = 0.8
-batch_size = 50
-batch_num = 5
-chain_len = 500
-prob_sample = 25
+sampling_method = args[1]
+sent_id = args[2]
+temp = args[3]
+with open(f'datafile/edit_rate_array_{sampling_method}_{sentence_id}_{temp}.pkl','rb') as f:
+    edit_rate = pickle.load(f)
+with open(f'datafile/prob_array_{sampling_method}_{sentence_id}_{temp}.pkl','rb') as f:
+    prob = pickle.load(f)
+batch_num = edit_rate.shape[0]
+batch_size = edit_rate.shape[1]
+chain_len = edit_rate.shape[2]
+prob_sample = int(chain_len/prob.shape[-1])
 gen_num = chain_len//prob_sample
-with open(f'textfile/bert_{sent_id}_{temp}.csv','r') as f:
+with open(f'textfile/bert_{sampling_method}_{sent_id}_{temp}.csv','r') as f:
     reader = csv.reader(f)
     file = [row for row in reader]
 head = file[0]
@@ -47,5 +52,5 @@ for i in range(batch_num):
     for j in range(gen_num):
         for k in range(batch_size):
             result[i][j][k] = embedded[batch_size*gen_num*i+batch_size*j+k]
-with open(f'datafile/tsne_{sent_id}_{temp}.pkl','wb') as f:
+with open(f'datafile/tsne_{sampling_method}_{sent_id}_{temp}.pkl','wb') as f:
     pickle.dump(result,f)
