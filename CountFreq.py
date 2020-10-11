@@ -4,6 +4,7 @@ import pickle
 import csv
 import sys
 import spacy
+from spacy.symbols import ORTH
 import time
 from multiprocessing import Pool
 import os
@@ -37,17 +38,29 @@ def ExtractFreq(id,metric,corpus):
     doc = LoadCorpus(corpus,id)
     Freq = {}
     for line in doc:
-        for token in line:
-            if metric == 'vocab':
-                word = token.text
-            elif metric == 'pos':
-                word = token.pos_
-            elif metric == 'tag':
-                word = token.tag_
-            if word in Freq:
-                Freq[word] += 1
+        if len(list(line.sents)) == 1:
+            if metric == 'dep':
+                for sent in line.sents:
+                    sent_text = [word.text for word in sent]
+                    total_dist = 0
+                    for token_pos,token in enumerate(sent):
+                        total_dist += abs(token_pos-sent_text.index(token.head.text))
+                    if total_dist in Freq:
+                        Freq[total_dist] += 1
+                    else:
+                        Freq[total_dist] = 1
             else:
-                Freq[word] = 1
+                for token in line:
+                    if metric == 'vocab':
+                        word = token.text
+                    elif metric == 'pos':
+                        word = token.pos_
+                    elif metric == 'tag':
+                        word = token.tag_
+                    if word in Freq:
+                        Freq[word] += 1
+                    else:
+                        Freq[word] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
@@ -58,8 +71,12 @@ def ExtractFreq(id,metric,corpus):
 
 nlp = spacy.load('en_core_web_lg')
 
+nlp.tokenizer.add_special_case("[UNK]",[{ORTH: "[UNK]"}])
+
 corpus = args[1]
 metric = args[2]
+assert corpus in ['wiki', 'bert'], 'Invalid corpus name'
+assert metric in ['vocab', 'pos', 'tag', 'dep'], 'Invalid metric name'
 
 if corpus == 'wiki':
     arg = [(folder_name,metric,corpus) for folder_name in folder_name_list]
