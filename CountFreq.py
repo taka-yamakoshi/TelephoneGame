@@ -34,44 +34,38 @@ def LoadCorpus(name,id):
     return doc
 
 def ExtractFreq(id,metric,corpus):
-    print(f'Processing {id}')
+    sent_num = 0
     doc = LoadCorpus(corpus,id)
     Freq = {}
     for line in doc:
         if len(list(line.sents)) == 1:
-            if metric == 'dep':
-                for sent in line.sents:
-                    sent_text = [word.text for word in sent]
-                    total_dist = 0
-                    for token_pos,token in enumerate(sent):
-                        total_dist += abs(token_pos-sent_text.index(token.head.text))
-                    if total_dist in Freq:
-                        Freq[total_dist] += 1
-                    else:
-                        Freq[total_dist] = 1
-            else:
-                for token in line:
-                    if metric == 'vocab':
-                        word = token.text
-                    elif metric == 'pos':
-                        word = token.pos_
-                    elif metric == 'tag':
-                        word = token.tag_
-                    if word in Freq:
-                        Freq[word] += 1
-                    else:
-                        Freq[word] = 1
+            sent_num += 1
+            for token in line:
+                if metric == 'vocab':
+                    word = token.text
+                elif metric == 'pos':
+                    word = token.pos_
+                elif metric == 'tag':
+                    word = token.tag_
+                elif metric == 'dep':
+                    word = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
+                if word in Freq:
+                    Freq[word] += 1
+                else:
+                    Freq[word] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
     elif corpus == 'bert':
         with open(f'datafile/{metric.upper()}FreqBert{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
+    print(f'Number of sentences for {id}: {sent_num}')
     return Freq
 
 nlp = spacy.load('en_core_web_lg')
-
 nlp.tokenizer.add_special_case("[UNK]",[{ORTH: "[UNK]"}])
+sentencizer = nlp.create_pipe("sentencizer")
+nlp.add_pipe(sentencizer,first=True)
 
 corpus = args[1]
 metric = args[2]
