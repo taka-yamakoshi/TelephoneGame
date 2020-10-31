@@ -40,19 +40,24 @@ def ExtractFreq(id,metric,corpus):
     for line in doc:
         if len(list(line.sents)) == 1:
             sent_num += 1
-            for token in line:
-                if metric == 'vocab':
-                    word = token.text
-                elif metric == 'pos':
-                    word = token.pos_
-                elif metric == 'tag':
-                    word = token.tag_
-                elif metric == 'dep':
-                    word = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
-                if word in Freq:
-                    Freq[word] += 1
+            if metric == 'dep':
+                total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
+                if total_dist in Freq:
+                    Freq[total_dist] += 1
                 else:
-                    Freq[word] = 1
+                    Freq[total_dist] = 1
+            else:
+                for token in line:
+                    if metric == 'vocab':
+                        word = token.text
+                    elif metric == 'pos':
+                        word = token.pos_
+                    elif metric == 'tag':
+                        word = token.tag_
+                    if word in Freq:
+                        Freq[word] += 1
+                    else:
+                        Freq[word] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
