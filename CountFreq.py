@@ -37,6 +37,7 @@ def ExtractFreq(id,metric,corpus):
     sent_num = 0
     doc = LoadCorpus(corpus,id)
     Freq = {}
+    ShortDep = ""
     for line in doc:
         if len(list(line.sents)) == 1:
             sent_num += 1
@@ -46,18 +47,34 @@ def ExtractFreq(id,metric,corpus):
                     Freq[total_dist] += 1
                 else:
                     Freq[total_dist] = 1
+                if total_dist == 10:
+                    ShortDep += line.text+'\n'
             else:
                 for token in line:
-                    if metric == 'vocab':
-                        word = token.text
-                    elif metric == 'pos':
-                        word = token.pos_
-                    elif metric == 'tag':
-                        word = token.tag_
-                    if word in Freq:
-                        Freq[word] += 1
-                    else:
-                        Freq[word] = 1
+                    if metric in ['vocab', 'pos', 'tag']:
+                        if metric == 'vocab':
+                            word = token.text
+                        elif metric == 'pos':
+                            word = token.pos_
+                        elif metric == 'tag':
+                            word = token.tag_
+                        if word in Freq:
+                            Freq[word] += 1
+                        else:
+                            Freq[word] = 1
+                    elif metric in ['pos_vocab', 'tag_vocab']:
+                        if metric == 'pos_vocab':
+                            word = token.pos_
+                        elif metric == 'tag_vocab':
+                            word = token.tag_
+                        if word in Freq:
+                            if token.text in Freq[word]:
+                                Freq[word][token.text] += 1
+                            else:
+                                Freq[word][token.text] = 1
+                        else:
+                            Freq[word] = {}
+                            Freq[word][token.text] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
@@ -65,7 +82,7 @@ def ExtractFreq(id,metric,corpus):
         with open(f'datafile/{metric.upper()}FreqBert{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
     print(f'Number of sentences for {id}: {sent_num}')
-    return Freq
+    return [Freq,ShortDep]
 
 nlp = spacy.load('en_core_web_lg')
 nlp.tokenizer.add_special_case("[UNK]",[{ORTH: "[UNK]"}])
@@ -75,7 +92,7 @@ nlp.add_pipe(sentencizer,first=True)
 corpus = args[1]
 metric = args[2]
 assert corpus in ['wiki', 'bert'], 'Invalid corpus name'
-assert metric in ['vocab', 'pos', 'tag', 'dep'], 'Invalid metric name'
+assert metric in ['vocab', 'pos', 'tag', 'dep', 'pos_vocab', 'tag_vocab'], 'Invalid metric name'
 
 if corpus == 'wiki':
     arg = [(folder_name,metric,corpus) for folder_name in folder_name_list]
@@ -83,18 +100,45 @@ elif corpus == 'bert':
     arg = [(i,metric,corpus) for i in range(4)]
 
 with Pool(processes=100) as p:
-    DictList = p.starmap(ExtractFreq,arg)
+    Results = p.starmap(ExtractFreq,arg)
+
+DictList = []
+ShortDepSent = []
+for line in Results:
+    DictList.append(line[0])
+    ShortDepSent.append(line[1])
 
 FreqDictAll = {}
-for Dict in DictList:
-    for word in Dict:
-        if word in FreqDictAll:
-            FreqDictAll[word] += Dict[word]
-        else:
-            FreqDictAll[word] = Dict[word]
+if metric in ['vocab', 'pos', 'tag', 'dep']:
+    for Dict in DictList:
+        for word in Dict:
+            if word in FreqDictAll:
+                FreqDictAll[word] += Dict[word]
+            else:
+                FreqDictAll[word] = Dict[word]
+elif metric in ['pos_vocab', 'tag_vocab']:
+    for Dict in DictList:
+        for word in Dict:
+            for token_text in Dict[word]:
+                if word in FreqDictAll:
+                    if token_text in FreqDictAll[word]:
+                        FreqDictAll[word][token_text] += 1
+                    else:
+                        FreqDictAll[word][token_text] = 1
+                else:
+                    FreqDictAll[word] = {}
+                    FreqDictAll[word][token_text] = 1
 if corpus == 'wiki':
     with open(f'../WikiData/10WordSents/{metric.upper()}FreqAll.pkl','wb') as f:
         pickle.dump(FreqDictAll,f)
+    if metric == 'dep':
+        with open('../WikiData/10WordSents/ShortDepSents.txt','w') as f:
+            for sentence in ShortDepSent:
+                f.write(sentence)
 elif corpus == 'bert':
     with open(f'datafile/{metric.upper()}FreqAllBert.pkl','wb') as f:
         pickle.dump(FreqDictAll,f)
+    if metric == 'dep':
+        with open('datafile/ShortDepSentsBert.txt','w') as f:
+            for sentence in ShortDepSent:
+                f.write(sentence)
