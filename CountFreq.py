@@ -16,7 +16,7 @@ alphabet_list = [chr(ord('A')+i) for i in range(26)]
 folder_name_list = [char1+char2 for char1 in alphabet_list for char2 in alphabet_list][:141]
 
 def TakeOutFuncTokens(sentence):
-    return ' '.join(sentence.split(' ')[1:-1])
+    return sentence.replace('[CLS]','').replace('[SEP]','').strip()
 
 def LoadCorpus(name,id):
     if name == 'wiki':
@@ -40,41 +40,42 @@ def ExtractFreq(id,metric,corpus):
     ShortDep = ""
     for line in doc:
         if len(list(line.sents)) == 1:
-            sent_num += 1
-            if metric == 'dep':
-                total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
-                if total_dist in Freq:
-                    Freq[total_dist] += 1
+            if len(line) == 10:
+                sent_num += 1
+                if metric == 'dep':
+                    total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
+                    if total_dist in Freq:
+                        Freq[total_dist] += 1
+                    else:
+                        Freq[total_dist] = 1
+                    if total_dist == 10:
+                        ShortDep += line.text+'\n'
                 else:
-                    Freq[total_dist] = 1
-                if total_dist == 10:
-                    ShortDep += line.text+'\n'
-            else:
-                for token in line:
-                    if metric in ['vocab', 'pos', 'tag']:
-                        if metric == 'vocab':
-                            word = token.text
-                        elif metric == 'pos':
-                            word = token.pos_
-                        elif metric == 'tag':
-                            word = token.tag_
-                        if word in Freq:
-                            Freq[word] += 1
-                        else:
-                            Freq[word] = 1
-                    elif metric in ['pos_vocab', 'tag_vocab']:
-                        if metric == 'pos_vocab':
-                            word = token.pos_
-                        elif metric == 'tag_vocab':
-                            word = token.tag_
-                        if word in Freq:
-                            if token.text in Freq[word]:
-                                Freq[word][token.text] += 1
+                    for token in line:
+                        if metric in ['vocab', 'pos', 'tag']:
+                            if metric == 'vocab':
+                                word = token.text
+                            elif metric == 'pos':
+                                word = token.pos_
+                            elif metric == 'tag':
+                                word = token.tag_
+                            if word in Freq:
+                                Freq[word] += 1
                             else:
+                                Freq[word] = 1
+                        elif metric in ['pos_vocab', 'tag_vocab']:
+                            if metric == 'pos_vocab':
+                                word = token.pos_
+                            elif metric == 'tag_vocab':
+                                word = token.tag_
+                            if word in Freq:
+                                if token.text in Freq[word]:
+                                    Freq[word][token.text] += 1
+                                else:
+                                    Freq[word][token.text] = 1
+                            else:
+                                Freq[word] = {}
                                 Freq[word][token.text] = 1
-                        else:
-                            Freq[word] = {}
-                            Freq[word][token.text] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
@@ -87,6 +88,8 @@ def ExtractFreq(id,metric,corpus):
 nlp = spacy.load('en_core_web_lg')
 nlp.tokenizer.add_special_case("[UNK]",[{ORTH: "[UNK]"}])
 sentencizer = nlp.create_pipe("sentencizer")
+for punct_char in ['.',',',':',';','!','?']:
+    sentencizer.punct_chars.add(punct_char)
 nlp.add_pipe(sentencizer,first=True)
 
 corpus = args[1]
@@ -122,12 +125,12 @@ elif metric in ['pos_vocab', 'tag_vocab']:
             for token_text in Dict[word]:
                 if word in FreqDictAll:
                     if token_text in FreqDictAll[word]:
-                        FreqDictAll[word][token_text] += 1
+                        FreqDictAll[word][token_text] += Dict[word][token_text]
                     else:
-                        FreqDictAll[word][token_text] = 1
+                        FreqDictAll[word][token_text] = Dict[word][token_text]
                 else:
                     FreqDictAll[word] = {}
-                    FreqDictAll[word][token_text] = 1
+                    FreqDictAll[word][token_text] = Dict[word][token_text]
 if corpus == 'wiki':
     with open(f'../WikiData/10WordSents/{metric.upper()}FreqAll.pkl','wb') as f:
         pickle.dump(FreqDictAll,f)
