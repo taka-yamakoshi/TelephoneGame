@@ -98,7 +98,7 @@ def ExtractFreq(id,metric,corpus):
 nlp = spacy.load('en_core_web_lg')
 nlp.tokenizer.add_special_case("[UNK]",[{ORTH: "[UNK]"}])
 sentencizer = nlp.create_pipe("sentencizer")
-for punct_char in ['.',',',':',';','!','?']:
+for punct_char in ['.',':',';','!','?']:
     sentencizer.punct_chars.add(punct_char)
 nlp.add_pipe(sentencizer,first=True)
 
