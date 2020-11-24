@@ -12,11 +12,11 @@ args = sys.argv
 
 def UniformGibbsSample(sentences,writer,batch_id,iter_num,decoded_init_sent):
     seq_len = sentences.shape[1]
-    rand_list = np.random.permutation(seq_len-2)+1
+    rand_list = torch.randperm(seq_len-2)+1
     with torch.no_grad():
         prob = 0
-        edit_num = np.zeros(sentences.shape[0])
-        cond_prob = np.zeros((sentences.shape[0],len(rand_list)))
+        edit_num = torch.zeros(sentences.shape[0]).to(device)
+        cond_prob = torch.zeros((sentences.shape[0],len(rand_list))).to(device)
         if iter_num%prob_sample==0:
             prob = CalcSentProbBatch(sentences)
         if iter_num%sent_sample==0:
@@ -29,24 +29,22 @@ def UniformGibbsSample(sentences,writer,batch_id,iter_num,decoded_init_sent):
             probs = F.softmax(outputs[0][:,pos]/temp,dim=-1)
             chosen_words = torch.tensor([torch.multinomial(prob,1) for prob in probs])
             if iter_num%edit_sample==0:
-                for i,word in enumerate(chosen_words):
-                    if word != sentences[i][pos]:
-                        edit_num[i] += 1
-                    cond_prob[i][pos_id] = torch.log(probs[i][word])
+                edit_num += torch.tensor([0 if word == sentences[i,pos] else 1 for i, word in enumerate(chosen_words)])
+                cond_prob[:,pos_id] = torch.log([probs[i,word] for i, word in enumerate(chosen_words)])
             sentences[:,pos] = chosen_words
         return sentences,edit_num/len(rand_list),prob,cond_prob
 
 def CalcSentProbBatch(batched_sentences):
     seq_len = batched_sentences.shape[-1]
-    sent_prob = np.array([CalcProbBatch(batched_sentences,i) for i in range(1,seq_len-1)])
-    return np.sum(sent_prob,axis=0)
+    sent_prob = torch.tensor([CalcProbBatch(batched_sentences,i) for i in range(1,seq_len-1)])
+    return torch.sum(sent_prob,axis=0)
 
 def CalcProbBatch(batched_sentences,i):
     masked_sentences = batched_sentences.clone()
     masked_sentences[:,i] = mask_id
     outputs = model(masked_sentences)
     probs = torch.log(F.softmax(outputs[0][:,i]/temp,dim=-1))
-    return [probs[j,batched_sentence[i]].item() for j,batched_sentence in enumerate(batched_sentences)]
+    return [probs[j,batched_sentence[i]] for j,batched_sentence in enumerate(batched_sentences)]
 
 core_id = args[2]
 os.environ["CUDA_VISIBLE_DEVICES"] = core_id
@@ -102,10 +100,10 @@ with open(f'textfile/bert_{sampling_method}_{sentence_id}_{temp}.csv','w') as f:
             for j in range(chain_len):
                 sents,edit_rate,prob,cond_prob = UniformGibbsSample(sents,writer,i,j,decoded_init_sent)
                 if j%edit_sample==0:
-                    edit_rate_array[i][:,j//edit_sample] = edit_rate
-                    cond_prob_array[:,j//edit_sample] = cond_prob
+                    edit_rate_array[i][:,j//edit_sample] = edit_rate.cpu().numpy()
+                    cond_prob_array[:,j//edit_sample] = cond_prob.cpu().numpy()
                 if j%prob_sample==0:
-                    prob_array[i][:,j//prob_sample] = prob
+                    prob_array[i][:,j//prob_sample] = prob.cpu().numpy()
                     print('iteration '+str(j))
                     print(prob)
         else:
