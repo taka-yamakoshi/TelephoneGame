@@ -27,7 +27,7 @@ def UniformGibbsSample(sentences,writer,batch_id,iter_num,decoded_init_sent):
             masked_sentences[:,pos] = mask_id
             outputs = model(masked_sentences)
             probs = F.softmax(outputs[0][:,pos]/temp,dim=-1)
-            chosen_words = torch.tensor([np.random.choice(len(prob),p=prob.cpu().numpy()) for prob in probs])
+            chosen_words = torch.tensor([torch.multinomial(prob,1) for prob in probs])
             if iter_num%edit_sample==0:
                 for i,word in enumerate(chosen_words):
                     if word != sentences[i][pos]:
@@ -61,13 +61,13 @@ mask_id = tokenizer.encode("[MASK]")[1:-1][0]
 #Parameters
 batch_size = 20
 #batch_num = 10
-chain_len = 10000
-prob_sample = 200
+chain_len = 11000
+prob_sample = 500
 temp = 1
 sampling_method = 'gibbs'
 sentence_id = args[1]
-sent_sample = 5
-edit_sample = 200
+sent_sample = 10
+edit_sample = 500
 
 #Load sentences
 with open(f'{sentence_id}.txt','r') as f:
