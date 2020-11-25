@@ -27,10 +27,10 @@ def UniformGibbsSample(sentences,writer,batch_id,iter_num,decoded_init_sent):
             masked_sentences[:,pos] = mask_id
             outputs = model(masked_sentences)
             probs = F.softmax(outputs[0][:,pos]/temp,dim=-1)
-            chosen_words = torch.tensor([torch.multinomial(prob,1) for prob in probs])
+            chosen_words = torch.tensor([torch.multinomial(prob,1) for prob in probs]).to(device)
             if iter_num%edit_sample==0:
-                edit_num += torch.tensor([0 if word == sentences[i,pos] else 1 for i, word in enumerate(chosen_words)])
-                cond_prob[:,pos_id] = torch.log([probs[i,word] for i, word in enumerate(chosen_words)])
+                edit_num += torch.tensor([0 if word == sentences[i,pos] else 1 for i, word in enumerate(chosen_words)]).to(device)
+                cond_prob[:,pos_id] = torch.tensor([torch.log(probs[i,word]) for i, word in enumerate(chosen_words)]).to(device)
             sentences[:,pos] = chosen_words
         return sentences,edit_num/len(rand_list),prob,cond_prob
 
@@ -104,7 +104,7 @@ with open(f'textfile/bert_{sampling_method}_{sentence_id}_{temp}.csv','w') as f:
                     cond_prob_array[:,j//edit_sample] = cond_prob.cpu().numpy()
                 if j%prob_sample==0:
                     prob_array[i][:,j//prob_sample] = prob.cpu().numpy()
-                    print('iteration '+str(j))
+                    print(f'iteration {j}')
                     print(prob)
         else:
             print("This code is only for Gibbs sampling.")
