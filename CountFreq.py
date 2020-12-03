@@ -8,6 +8,7 @@ from spacy.symbols import ORTH
 import time
 from multiprocessing import Pool
 import os
+import argparse
 
 sys.path.append('..')
 args = sys.argv
@@ -103,16 +104,19 @@ for punct_char in ['.',':',';','!','?']:
     sentencizer.punct_chars.add(punct_char)
 nlp.add_pipe(sentencizer,first=True)
 
-corpus = args[1]
-metric = args[2]
+parser = argparse.ArgumentParser()
+parser.add_argument('--corpus', type = str, required = True)
+parser.add_argument('--metric', type = str, required = True)
+parser.add_argument('--sent_sample', type = int, required = True,
+                    help='frequency of recording sentences')
 assert corpus in ['wiki', 'bert'], 'Invalid corpus name'
 assert metric in ['vocab', 'pos', 'tag', 'dep', 'pos_vocab', 'tag_vocab', 'dep_norm'], 'Invalid metric name'
-sent_sample = 10
+print('running with args', args)
 
 if corpus == 'wiki':
     arg = [(folder_name,metric,corpus) for folder_name in folder_name_list]
 elif corpus == 'bert':
-    arg = [(i,metric,corpus) for i in range(20)]
+    arg = [(i,metric,corpus) for i in range(4)]
 
 with Pool(processes=100) as p:
     Results = p.starmap(ExtractFreq,arg)
