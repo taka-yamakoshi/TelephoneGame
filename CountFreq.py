@@ -24,12 +24,12 @@ def LoadCorpus(name,id):
             text = f.read().split('\n')[:-1]
         doc = nlp.pipe(text)
     elif name == 'bert':
-        with open(f'textfile/bert_gibbs_input_{id}_1_fixed.csv','r') as f:
+        with open(f'textfile/bert_gibbs_input_{id}_1.csv','r') as f:
             reader = csv.reader(f)
             file = [row for row in reader]
             head = file[0]
             text = file[1:]
-        Converged = [TakeOutFuncTokens(row[head.index(f'chain {j}')]) for row in text for j in range(10) if int(row[head.index('iter_num')]) > 1000]
+        Converged = [TakeOutFuncTokens(row[head.index(f'chain {j}')]) for row in text for j in range(10) if int(row[head.index('iter_num')]) > 1000 and int(row[head.index('iter_num')])%sent_sample==0]
         doc = nlp.pipe(Converged)
     return doc
 
@@ -40,52 +40,53 @@ def ExtractFreq(id,metric,corpus):
     ShortDep = ""
     for line in doc:
         if len(list(line.sents)) == 1:
-            sent_num += 1
-            if metric in ['dep','dep_norm']:
-                total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
-                if metric == 'dep':
-                    if total_dist in Freq:
-                        Freq[total_dist] += 1
-                    else:
-                        Freq[total_dist] = 1
-                elif metric == 'dep_norm':
-                    seq_len = len(line)
-                    if seq_len in Freq:
-                        if total_dist in Freq[seq_len]:
-                            Freq[seq_len][total_dist] += 1
+            if len(line) == 10:
+                sent_num += 1
+                if metric in ['dep','dep_norm']:
+                    total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
+                    if metric == 'dep':
+                        if total_dist in Freq:
+                            Freq[total_dist] += 1
                         else:
-                            Freq[seq_len][total_dist] = 1
-                    else:
-                        Freq[seq_len] = {}
-                        Freq[seq_len][total_dist] = 1
-                if total_dist == 10:
-                    ShortDep += line.text+'\n'
-            else:
-                for token in line:
-                    if metric in ['vocab', 'pos', 'tag']:
-                        if metric == 'vocab':
-                            word = token.text
-                        elif metric == 'pos':
-                            word = token.pos_
-                        elif metric == 'tag':
-                            word = token.tag_
-                        if word in Freq:
-                            Freq[word] += 1
-                        else:
-                            Freq[word] = 1
-                    elif metric in ['pos_vocab', 'tag_vocab']:
-                        if metric == 'pos_vocab':
-                            word = token.pos_
-                        elif metric == 'tag_vocab':
-                            word = token.tag_
-                        if word in Freq:
-                            if token.text in Freq[word]:
-                                Freq[word][token.text] += 1
+                            Freq[total_dist] = 1
+                    elif metric == 'dep_norm':
+                        seq_len = len(line)
+                        if seq_len in Freq:
+                            if total_dist in Freq[seq_len]:
+                                Freq[seq_len][total_dist] += 1
                             else:
-                                Freq[word][token.text] = 1
+                                Freq[seq_len][total_dist] = 1
                         else:
-                            Freq[word] = {}
-                            Freq[word][token.text] = 1
+                            Freq[seq_len] = {}
+                            Freq[seq_len][total_dist] = 1
+                    if total_dist == 10:
+                        ShortDep += line.text+'\n'
+                else:
+                    for token in line:
+                        if metric in ['vocab', 'pos', 'tag']:
+                            if metric == 'vocab':
+                                word = token.text
+                            elif metric == 'pos':
+                                word = token.pos_
+                            elif metric == 'tag':
+                                word = token.tag_
+                            if word in Freq:
+                                Freq[word] += 1
+                            else:
+                                Freq[word] = 1
+                        elif metric in ['pos_vocab', 'tag_vocab']:
+                            if metric == 'pos_vocab':
+                                word = token.pos_
+                            elif metric == 'tag_vocab':
+                                word = token.tag_
+                            if word in Freq:
+                                if token.text.lower() in Freq[word]:
+                                    Freq[word][token.text.lower()] += 1
+                                else:
+                                    Freq[word][token.text.lower()] = 1
+                            else:
+                                Freq[word] = {}
+                                Freq[word][token.text.lower()] = 1
     if corpus == 'wiki':
         with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
             pickle.dump(Freq,f)
@@ -106,11 +107,12 @@ corpus = args[1]
 metric = args[2]
 assert corpus in ['wiki', 'bert'], 'Invalid corpus name'
 assert metric in ['vocab', 'pos', 'tag', 'dep', 'pos_vocab', 'tag_vocab', 'dep_norm'], 'Invalid metric name'
+sent_sample = 10
 
 if corpus == 'wiki':
     arg = [(folder_name,metric,corpus) for folder_name in folder_name_list]
 elif corpus == 'bert':
-    arg = [(i,metric,corpus) for i in range(4)]
+    arg = [(i,metric,corpus) for i in range(20)]
 
 with Pool(processes=100) as p:
     Results = p.starmap(ExtractFreq,arg)
