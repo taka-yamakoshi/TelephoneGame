@@ -1,3 +1,4 @@
+# python bert.py --sentence_id input_1 --core_id 1
 import torch
 import numpy as np
 import pickle
@@ -7,117 +8,154 @@ import csv
 import time
 import sys
 import os
-sys.path.append('..')
-args = sys.argv
+import argparse
+import spacy
 
-def UniformGibbsSample(sentences,writer,batch_id,iter_num,decoded_init_sent):
-    seq_len = sentences.shape[1]
-    rand_list = np.random.permutation(seq_len-2)+1
-    with torch.no_grad():
-        prob = 0
-        edit_num = np.zeros(sentences.shape[0])
-        cond_prob = np.zeros((sentences.shape[0],len(rand_list)))
-        if iter_num%prob_sample==0:
-            prob = CalcSentProbBatch(sentences)
-        if iter_num%sent_sample==0:
-            index =chain_len*batch_id+iter_num
-            writer.writerow([str(index),decoded_init_sent,str(batch_id),str(iter_num)]+[tokenizer.decode(sentence) for sentence in sentences])
-        for pos_id,pos in enumerate(rand_list):
-            masked_sentences = sentences.clone()
-            masked_sentences[:,pos] = mask_id
-            outputs = model(masked_sentences)
-            probs = F.softmax(outputs[0][:,pos]/temp,dim=-1)
-            chosen_words = torch.tensor([np.random.choice(len(prob),p=prob.cpu().numpy()) for prob in probs])
-            if iter_num%edit_sample==0:
-                for i,word in enumerate(chosen_words):
-                    if word != sentences[i][pos]:
-                        edit_num[i] += 1
-                    cond_prob[i][pos_id] = torch.log(probs[i][word])
-            sentences[:,pos] = chosen_words
-        return sentences,edit_num/len(rand_list),prob,cond_prob
-
-def CalcSentProbBatch(batched_sentences):
-    seq_len = batched_sentences.shape[-1]
-    sent_prob = np.array([CalcProbBatch(batched_sentences,i) for i in range(1,seq_len-1)])
-    return np.sum(sent_prob,axis=0)
-
-def CalcProbBatch(batched_sentences,i):
-    masked_sentences = batched_sentences.clone()
-    masked_sentences[:,i] = mask_id
-    outputs = model(masked_sentences)
-    probs = torch.log(F.softmax(outputs[0][:,i]/temp,dim=-1))
-    return [probs[j,batched_sentence[i]].item() for j,batched_sentence in enumerate(batched_sentences)]
-
-core_id = args[2]
-os.environ["CUDA_VISIBLE_DEVICES"] = core_id
-#Load the model
+# Load the model
+nlp = spacy.load('en_core_web_lg')
 tokenizer = BertTokenizer.from_pretrained('bert-large-cased')
 model = BertForMaskedLM.from_pretrained('bert-large-cased')
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-model.eval()
+
+nlp.tokenizer.add_special_case("[UNK]",[{"ORTH": "[UNK]"}])
 mask_id = tokenizer.encode("[MASK]")[1:-1][0]
+sys.path.append('..')
 
-#Parameters
-batch_size = 20
-#batch_num = 10
-chain_len = 10000
-prob_sample = 200
-temp = 1
-sampling_method = 'gibbs'
-sentence_id = args[1]
-sent_sample = 5
-edit_sample = 200
+class Writer():
+    def __init__(self, args, save_file) :
+        self.batch_size = args.batch_size
+        self.chain_len = args.chain_len
+        self.save_file = save_file
+        self.init_output_csv()
 
-#Load sentences
-with open(f'{sentence_id}.txt','r') as f:
-    input_sentences = f.read().split('\n')[:-1]
-#assert len(input_sentences) == batch_num
-batch_num = len(input_sentences)
+    def init_output_csv(self, header=None):
+        header = ['sentence_num','chain_num','iter_num',
+                  'initial_sentence', 'sentence', 'prob', 'edit_rate']
+        with open(self.save_file, "w") as writeFile:
+            csv.writer(writeFile).writerows(header)
 
-#Preassign arrrays
-edit_rate_array = np.zeros((batch_num,batch_size,chain_len//edit_sample))
-prob_array = np.zeros((batch_num,batch_size,chain_len//prob_sample))
-cond_prob_array_list = []
+    def reset(self, sentence_num, init_sent) :
+        self.init_sent = init_sent
+        self.sentence_num = sentence_num
 
-#Run the sampling
-with open(f'textfile/bert_{sampling_method}_{sentence_id}_{temp}.csv','w') as f:
-    writer = csv.writer(f)
-    head = ['index','initial_sentence','batch_num','iter_num']+[f'chain {k}' for k in range(batch_size)]
-    writer.writerow(head)
-    for i in range(batch_num):
+    def write(self, iter_num, sentences, probs):
+        with open(self.save_file, "a") as writeFile:
+            csvwriter = csv.writer(writeFile)
+            decoded_sentences = [str(tokenizer.decode(sentence)) 
+                                 for sentence in sentences]
+            print(iter_num)
+            print(decoded_sentences)
+            for row_id, sentence in enumerate(decoded_sentences) :
+                csvwriter.writerow([
+                    self.sentence_num, row_id, iter_num, 
+                    self.init_sent, sentence, probs[row_id]
+                ])
+
+class UniformGibbs() :
+    def __init__(self, sentences, temp) :
+        self.sentences = sentences 
+        self.temp = temp
+
+    @torch.no_grad()
+    def step(self, iter_num) :
+        seq_len = self.sentences.shape[1]
+
+        # Why - 2 + 1? (excluding first/last?)
+        rand_list = np.random.permutation(seq_len - 2) + 1
+        for pos_id,pos in enumerate(rand_list):
+            probs = self.mask_prob(pos)
+
+            # be careful how we're looping here...
+            chosen_words = torch.tensor([
+                np.random.choice(len(prob), p=prob.cpu().numpy()) 
+                for prob in probs
+            ])
+
+            # replace with chosen words
+            new_sentences = self.sentences.clone()
+            new_sentences[:,pos] = chosen_words
+            self.sentences = new_sentences
+
+    def mask_prob (self, position) :
+        """
+        Predict probability of words at mask position
+        """
+        masked_sentences = self.sentences.clone()
+        masked_sentences[:, position] = mask_id
+        outputs = model(masked_sentences)
+        return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
+
+    def get_total_likelihood(self) :
+        sent_probs = np.zeros(self.sentences.shape)
+
+        # Why cut off first and last?
+        for j in range(1, self.sentences.shape[1] - 1) :
+            probs = torch.log(self.mask_prob(j))
+            for i in range(self.sentences.shape[0]) :
+                # Look up probability of the actual word at this position
+                sent_probs[i, j] = probs[i, self.sentences[i, j]].item() 
+
+        # Sum log probs for each sentence in batch
+        return np.sum(sent_probs, axis=1)
+
+def run_chains(args) :
+    # Load sentences
+    with open(f'{args.sentence_id}.txt','r') as f:
+        input_sentences = f.read().split('\n')[:-1]
+        batch_num = len(input_sentences)
+
+    # Run the sampling
+    f = f'textfile/bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+    writer = Writer(args, f)
+    for i, input_sentence in enumerate(input_sentences):
+        print(f'Beginning batch {i}')
         time1 = time.time()
-        sentence = input_sentences[i]
-        words = sentence.split(" ")
-        words[0] = words[0].capitalize()
-        words.append(".")
-        init_sentence = tokenizer(" ".join(words), return_tensors="pt")["input_ids"][0].to(device)
-        decoded_init_sent = tokenizer.decode(init_sentence)
-        print("initial_sentence: "+decoded_init_sent)
-        init_input = init_sentence.expand((batch_size,init_sentence.shape[0]))
-        sents = init_input.clone()
-        seq_len = sents.shape[1]
-        if sampling_method == 'gibbs':
-            cond_prob_array = np.zeros((batch_size,chain_len//edit_sample,seq_len-2))
-            for j in range(chain_len):
-                sents,edit_rate,prob,cond_prob = UniformGibbsSample(sents,writer,i,j,decoded_init_sent)
-                if j%edit_sample==0:
-                    edit_rate_array[i][:,j//edit_sample] = edit_rate
-                    cond_prob_array[:,j//edit_sample] = cond_prob
-                if j%prob_sample==0:
-                    prob_array[i][:,j//prob_sample] = prob
-                    print('iteration '+str(j))
-                    print(prob)
-        else:
-            print("This code is only for Gibbs sampling.")
-            exit()
-        cond_prob_array_list.append(cond_prob_array)
+        words = input_sentence.capitalize() + "."
+        tokenized_sentence = tokenizer(words, return_tensors="pt")
+        init_input = (tokenized_sentence["input_ids"][0]
+                      .to(args.device)
+                      .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
+        
+        # reset writer 
+        writer.reset(i, words)
+        sampler = UniformGibbs(init_input, args.temp)
+        for iter_num in range(args.chain_len):
+            print(iter_num)
+            sampler.step(iter_num)
+            
+            # Write out sentences
+            if iter_num % args.sent_sample == 0:
+                writer.write(iter_num, sampler.sentences, 
+                             sampler.get_total_likelihood())
         time2 = time.time()
         print(f'Time it took for {i}th batch: {time2-time1}')
 
-with open(f'datafile/edit_rate_array_{sampling_method}_{sentence_id}_{temp}.pkl','wb') as f:
-    pickle.dump(edit_rate_array,f)
-with open(f'datafile/prob_array_{sampling_method}_{sentence_id}_{temp}.pkl','wb') as f:
-    pickle.dump(prob_array,f)
-with open(f'datafile/cond_prob_array_{sampling_method}_{sentence_id}_{temp}.pkl','wb') as f:
-    pickle.dump(cond_prob_array_list,f)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--sentence_id', type = str, required = True)
+    parser.add_argument('--core_id', type = str, required = True)
+    parser.add_argument('--batch_size', type=int, default=20, 
+                        help='number of sentences to maintain')
+    parser.add_argument('--chain_len', type=int, default = 10000, 
+                        help='number of samples')
+    parser.add_argument('--prob_sample', type = int, default = 200, 
+                        help='frequency of recording sentence probabilities')
+    parser.add_argument('--temp', type = float, default = 1, 
+                        help='softmax temperature')
+    parser.add_argument('--sampling_method', type=str, default = 'gibbs', 
+                        choices=['gibbs'],
+                        help='kind of sampling to do; options include "gibbs"')
+    parser.add_argument('--sent_sample', type=int, default = 200, 
+                        help='frequency of recording sentences')
+    parser.add_argument('--edit_sample', type = int, default = 200, 
+                        help='frequency of recording edit rate')
+    args = parser.parse_args()
+
+    print('running with args', args)
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
+    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+    model.to(args.device)
+    model.eval()
+
+    # launch chains
+    run_chains(args)
