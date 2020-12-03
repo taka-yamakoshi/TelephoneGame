@@ -51,29 +51,44 @@ class Writer():
                 ])
 
 class UniformGibbs() :
-    def __init__(self, sentences, temp) :
+    def __init__(self, sentences, temp, fix_length) :
         self.sentences = sentences 
+        self.fix_length = fix_length
         self.temp = temp
 
     @torch.no_grad()
     def step(self, iter_num) :
         seq_len = self.sentences.shape[1]
 
-        # Why - 2 + 1? (excluding first/last?)
+        # exclude first/last tokens (CLS/SEP) from positions
         rand_list = np.random.permutation(seq_len - 2) + 1
         for pos_id,pos in enumerate(rand_list):
             probs = self.mask_prob(pos)
+            self.sentences = self.sample_words(probs, pos, self.sentences)
 
-            # be careful how we're looping here...
-            chosen_words = torch.tensor([
-                np.random.choice(len(prob), p=prob.cpu().numpy()) 
-                for prob in probs
-            ])
+            # keep sampling until they're the correct length according to spacy
+            attempts = 0
+            while not all([len(nlp(tokenizer.decode(sentence[1:-1]))) == 11 
+                           for sentence in self.sentences]) and self.fix_length:
 
-            # replace with chosen words
-            new_sentences = self.sentences.clone()
-            new_sentences[:,pos] = chosen_words
-            self.sentences = new_sentences
+                # resample only indices that are bad
+                bad_i = torch.ByteTensor([
+                    len(nlp(tokenizer.decode(sentence[1:-1]))) != 11 
+                    for sentence in self.sentences
+                ])
+                self.sentences[bad_i, :] = self.sample_words(probs[bad_i,:], pos, 
+                                                             self.sentences[bad_i, :])
+                # sometimes we get stuck with values where there are no valid choices.
+                # in this case, just move on.
+                attempts += 1
+                if attempts > 10 :
+                    break
+
+    def sample_words(self, probs, pos, sentences):
+        chosen_words = torch.multinomial(probs, 1).squeeze(-1)
+        new_sentences = sentences.clone()
+        new_sentences[:,pos] = chosen_words
+        return new_sentences
 
     def mask_prob (self, position) :
         """
@@ -114,12 +129,11 @@ def run_chains(args) :
         init_input = (tokenized_sentence["input_ids"][0]
                       .to(args.device)
                       .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
-        
         # reset writer 
         writer.reset(i, words)
-        sampler = UniformGibbs(init_input, args.temp)
+        sampler = UniformGibbs(init_input, args.temp, args.fix_length)
         for iter_num in range(args.chain_len):
-            print(iter_num)
+            print(f'Beginning iteration {iter_num}')
             sampler.step(iter_num)
             
             # Write out sentences
@@ -137,17 +151,16 @@ if __name__ == '__main__':
                         help='number of sentences to maintain')
     parser.add_argument('--chain_len', type=int, default = 10000, 
                         help='number of samples')
-    parser.add_argument('--prob_sample', type = int, default = 200, 
-                        help='frequency of recording sentence probabilities')
     parser.add_argument('--temp', type = float, default = 1, 
                         help='softmax temperature')
+    parser.add_argument('--sent_sample', type=int, default = 5, 
+                        help='frequency of recording sentences')
     parser.add_argument('--sampling_method', type=str, default = 'gibbs', 
                         choices=['gibbs'],
                         help='kind of sampling to do; options include "gibbs"')
-    parser.add_argument('--sent_sample', type=int, default = 200, 
-                        help='frequency of recording sentences')
-    parser.add_argument('--edit_sample', type = int, default = 200, 
-                        help='frequency of recording edit rate')
+    parser.add_argument('--fix_length', type=bool, default = False, 
+                        help='if True, resample to avoid changing length')
+
     args = parser.parse_args()
 
     print('running with args', args)
