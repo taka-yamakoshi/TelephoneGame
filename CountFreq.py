@@ -9,31 +9,42 @@ import time
 from multiprocessing import Pool
 import os
 import argparse
+import glob
 from ExtractFixedLenSents import TokenizerSetUp
 
 sys.path.append('..')
 
 def TakeOutFuncTokens(sentence):
+    '''
+        Take out special tokens
+    '''
     return sentence.replace('[CLS]','').replace('[SEP]','').strip()
 
-def LoadCorpus(name,id):
-    if name == 'wiki':
-        with open(f'../WikiData/10WordSents/{id}.txt','r') as f:
+def LoadCorpus(corpus,file_name):
+    '''
+        Load either wikipedia or bert-generated sentences
+        For bert, the first 1000 is for the burn-in period
+    '''
+    if corpus == 'wiki':
+        with open(f'{text_path}{file_name}.txt','r') as f:
             text = f.read().split('\n')[:-1]
         doc = nlp.pipe(text)
-    elif name == 'bert':
-        with open(f'textfile/bert_gibbs_input_{id}_1.csv','r') as f:
+    elif corpus == 'bert':
+        with open(f'{text_path}{file_name}.csv','r') as f:
             reader = csv.reader(f)
             file = [row for row in reader]
             head = file[0]
             text = file[1:]
-        Converged = [TakeOutFuncTokens(row[head.index(f'chain {j}')]) for row in text for j in range(10) if int(row[head.index('iter_num')]) > 1000 and int(row[head.index('iter_num')])%args.sent_sample==0]
+        Converged = [TakeOutFuncTokens(row[head.index(f'chain {j}')]) for row in text for j in range(args.batch_size) if int(row[head.index('iter_num')]) > 1000 and int(row[head.index('iter_num')])%args.sent_sample==0]
         doc = nlp.pipe(Converged)
     return doc
 
-def ExtractFreq(id,metric,corpus):
+def ExtractFreq(file_name,metric,corpus):
+    '''
+        Extract frequency of the specified 'metric' and return dictionary
+    '''
     sent_num = 0
-    doc = LoadCorpus(corpus,id)
+    doc = LoadCorpus(corpus,file_name)
     Freq = {}
     ShortDep = ""
     for line in doc:
@@ -86,37 +97,48 @@ def ExtractFreq(id,metric,corpus):
                                 Freq[word] = {}
                                 Freq[word][token.text.lower()] = 1
     if corpus == 'wiki':
-        with open(f'../WikiData/10WordSents/CountFiles/{metric.upper()}Freq{id}.pkl','wb') as f:
+        with open(f'{data_path}CountFiles/{args.metric.upper()}Freq{file_name}.pkl','wb') as f:
             pickle.dump(Freq,f)
     elif corpus == 'bert':
-        with open(f'datafile/{metric.upper()}FreqBert{id}.pkl','wb') as f:
+        with open(f'{data_path}CountFiles/{args.metric.upper()}FreqBert{file_name}.pkl','wb') as f:
             pickle.dump(Freq,f)
-    print(f'Number of sentences for {id}: {sent_num}')
+    print(f'Number of sentences for {file_name}: {sent_num}')
     return [Freq,ShortDep]
 
+##Organize arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--corpus', type = str, required = True)
 parser.add_argument('--metric', type = str, required = True)
-parser.add_argument('--sent_sample', type = int, required = True,
-                    help='frequency of recording sentences')
+#The rest are only for bert
+parser.add_argument('--model', type = str)
+parser.add_argument('--batch_size', type = int)
+parser.add_argument('--chain_len', type = int)
+parser.add_argument('--sent_sample', type = int)
 args = parser.parse_args()
 assert args.corpus in ['wiki', 'bert'], 'Invalid corpus name'
 assert args.metric in ['vocab', 'pos', 'tag', 'dep', 'pos_vocab', 'tag_vocab', 'dep_norm'], 'Invalid metric name'
 print('running with args', args)
 
-alphabet_list = [chr(ord('A')+i) for i in range(26)]
-folder_name_list = [char1+char2 for char1 in alphabet_list for char2 in alphabet_list][:141]
+##Specify proper paths and gather file names
+if args.corpus == 'bert':
+    assert args.chain_len != None and args.batch_size != None and args.sent_sample != None
+    text_path = f'textfile/{args.model}/{args.batch_size}_{args.chain_len}/bert_gibbs_input_'
+    data_path = f'datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/'
+    files = [file_name.replace(f'{text_path}','').replace('.csv','') for file_name in glob.glob(f'{text_path}*.csv')]
+elif args.corpus == 'wiki':
+    text_path = 'WikiData/10WordSents/textfile/'
+    data_path = 'WikiData/10WordSents/datafile/'
+    files = [file_name.replace(f'{text_path}','').replace('.txt','') for file_name in glob.glob(f'{text_path}*.txt')]
+arg = [(file_name,args.metric,args.corpus) for file_name in files]
 
-if args.corpus == 'wiki':
-    arg = [(folder_name,args.metric,args.corpus) for folder_name in folder_name_list]
-elif args.corpus == 'bert':
-    arg = [(i,args.metric,args.corpus) for i in range(4)]
-
+##Set up the spacy tokenizer
 nlp = TokenizerSetUp()
 
+##Extract frequency
 with Pool(processes=100) as p:
     Results = p.starmap(ExtractFreq,arg)
 
+##Unify the paralleled dictionary outputs to a single dictionary
 DictList = []
 ShortDepSent = []
 for line in Results:
@@ -143,17 +165,19 @@ elif args.metric in ['pos_vocab', 'tag_vocab', 'dep_norm']:
                 else:
                     FreqDictAll[word] = {}
                     FreqDictAll[word][token_text] = Dict[word][token_text]
+
+##Write out
 if args.corpus == 'wiki':
-    with open(f'../WikiData/10WordSents/{args.metric.upper()}FreqAll.pkl','wb') as f:
+    with open(f'{data_path}{args.metric.upper()}FreqAll.pkl','wb') as f:
         pickle.dump(FreqDictAll,f)
     if args.metric in ['dep', 'dep_norm']:
-        with open('../WikiData/10WordSents/ShortDepSents.txt','w') as f:
+        with open(f'{data_path}ShortDepSents/ShortDepSents.txt','w') as f:
             for sentence in ShortDepSent:
                 f.write(sentence)
 elif args.corpus == 'bert':
-    with open(f'datafile/{args.metric.upper()}FreqAllBert.pkl','wb') as f:
+    with open(f'{data_path}{args.metric.upper()}FreqAllBert.pkl','wb') as f:
         pickle.dump(FreqDictAll,f)
     if args.metric in ['dep', 'dep_norm']:
-        with open('datafile/ShortDepSentsBert.txt','w') as f:
+        with open(f'{data_path}ShortDepSents/ShortDepSentsBert.txt','w') as f:
             for sentence in ShortDepSent:
                 f.write(sentence)
