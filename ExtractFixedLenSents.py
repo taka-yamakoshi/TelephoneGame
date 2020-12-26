@@ -24,8 +24,7 @@ def ExtractSentences(i,folder_path):
         for page in file:
             text = json.loads(page)['text'].replace('\n',' ')
             #text = text.encode('ascii','replace').decode('ascii')
-            line = nlp(text)
-            for sent in line.sents:
+            for sent in nlp(text).sents:
                 if len(sent) == args.num_tokens:
                     sent_list.append(sent.text+'\n')
     return ''.join(sent_list)
@@ -45,7 +44,7 @@ def ExtractSentencesBert(i,folder_path):
                 #Below is to avoid sentences longer than the maximum sequence length for BERT (512 tokens)
                 if len(sent)<50:
                     if len(bert_tokenizer(sent.text)['input_ids'])==args.num_tokens:
-                        sent_list.append(sent.text)
+                        sent_list.append(sent.text+'\n')
     return ''.join(sent_list)
 
 def TokenizerSetUp():
