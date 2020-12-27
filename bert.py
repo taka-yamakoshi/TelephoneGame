@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import pickle
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
+from ExtractFixedLenSents import TokenizerSetUp
 import torch.nn.functional as F
 import csv
 import time
@@ -11,14 +12,6 @@ import os
 import argparse
 import spacy
 
-# Load the model
-nlp = spacy.load('en_core_web_lg')
-tokenizer = BertTokenizer.from_pretrained('bert-large-cased')
-model = BertForMaskedLM.from_pretrained('bert-large-cased')
-
-nlp.tokenizer.add_special_case("[UNK]",[{"ORTH": "[UNK]"}])
-mask_id = tokenizer.encode("[MASK]")[1:-1][0]
-sys.path.append('..')
 
 class Writer():
     def __init__(self, args, save_file) :
@@ -31,23 +24,26 @@ class Writer():
         header = ['sentence_num','chain_num','iter_num',
                   'initial_sentence', 'sentence', 'prob', 'edit_rate']
         with open(self.save_file, "w") as writeFile:
-            csv.writer(writeFile).writerows(header)
+            csv.writer(writeFile).writerow(header)
 
     def reset(self, sentence_num, init_sent) :
         self.init_sent = init_sent
         self.sentence_num = sentence_num
 
-    def write(self, iter_num, sentences, probs):
+    def write(self, iter_num, sentences, probs, edit_rate):
         with open(self.save_file, "a") as writeFile:
             csvwriter = csv.writer(writeFile)
             decoded_sentences = [str(tokenizer.decode(sentence)) 
                                  for sentence in sentences]
-            print(iter_num)
-            print(decoded_sentences)
+            if iter_num%1000==0:
+                print(iter_num)
+                print(decoded_sentences)
+                print(probs)
+                print(edit_rate)
             for row_id, sentence in enumerate(decoded_sentences) :
                 csvwriter.writerow([
                     self.sentence_num, row_id, iter_num, 
-                    self.init_sent, sentence, probs[row_id]
+                    self.init_sent, sentence, probs[row_id], edit_rate[row_id].item()
                 ])
 
 class UniformGibbs() :
@@ -62,33 +58,38 @@ class UniformGibbs() :
 
         # exclude first/last tokens (CLS/SEP) from positions
         rand_list = np.random.permutation(seq_len - 2) + 1
+        edit_locs = torch.zeros((self.sentences.shape[0],len(rand_list)))
         for pos_id,pos in enumerate(rand_list):
             probs = self.mask_prob(pos)
-            self.sentences = self.sample_words(probs, pos, self.sentences)
+            self.sentences, edit_loc = self.sample_words(probs, pos, self.sentences)
 
             # keep sampling until they're the correct length according to spacy
             attempts = 0
-            while not all([len(nlp(tokenizer.decode(sentence[1:-1]))) == 11 
-                           for sentence in self.sentences]) and self.fix_length:
+            if self.fix_length:
+                while not all([len(nlp(tokenizer.decode(sentence[1:-1]))) == 11
+                               for sentence in self.sentences]):
 
-                # resample only indices that are bad
-                bad_i = torch.ByteTensor([
-                    len(nlp(tokenizer.decode(sentence[1:-1]))) != 11 
-                    for sentence in self.sentences
-                ])
-                self.sentences[bad_i, :] = self.sample_words(probs[bad_i,:], pos, 
-                                                             self.sentences[bad_i, :])
-                # sometimes we get stuck with values where there are no valid choices.
-                # in this case, just move on.
-                attempts += 1
-                if attempts > 10 :
-                    break
+                    # resample only indices that are bad
+                    bad_i = torch.ByteTensor([
+                        len(nlp(tokenizer.decode(sentence[1:-1]))) != 11
+                        for sentence in self.sentences
+                    ])
+                    self.sentences[bad_i, :], edit_loc = self.sample_words(probs[bad_i,:], pos,
+                                                                 self.sentences[bad_i, :])
+                    # sometimes we get stuck with values where there are no valid choices.
+                    # in this case, just move on.
+                    attempts += 1
+                    if attempts > 10 :
+                        break
+            edit_locs[:,pos_id] = edit_loc
+        self.edit_rate = torch.mean(edit_locs,axis=1)
 
     def sample_words(self, probs, pos, sentences):
         chosen_words = torch.multinomial(probs, 1).squeeze(-1)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = chosen_words
-        return new_sentences
+        edit_loc = sentences[:,pos] == chosen_words
+        return new_sentences, edit_loc
 
     def mask_prob (self, position) :
         """
@@ -119,7 +120,7 @@ def run_chains(args) :
         batch_num = len(input_sentences)
 
     # Run the sampling
-    f = f'textfile/bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+    f = f'textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
         print(f'Beginning batch {i}')
@@ -133,13 +134,13 @@ def run_chains(args) :
         writer.reset(i, words)
         sampler = UniformGibbs(init_input, args.temp, args.fix_length)
         for iter_num in range(args.chain_len):
-            print(f'Beginning iteration {iter_num}')
+            #print(f'Beginning iteration {iter_num}')
             sampler.step(iter_num)
             
             # Write out sentences
             if iter_num % args.sent_sample == 0:
                 writer.write(iter_num, sampler.sentences, 
-                             sampler.get_total_likelihood())
+                             sampler.get_total_likelihood(),sampler.edit_rate)
         time2 = time.time()
         print(f'Time it took for {i}th batch: {time2-time1}')
 
@@ -147,6 +148,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--sentence_id', type = str, required = True)
     parser.add_argument('--core_id', type = str, required = True)
+    parser.add_argument('--model_name', type = str, default = 'bert-base-uncased')
     parser.add_argument('--batch_size', type=int, default=20, 
                         help='number of sentences to maintain')
     parser.add_argument('--chain_len', type=int, default = 10000, 
@@ -165,10 +167,19 @@ if __name__ == '__main__':
 
     print('running with args', args)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
-    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+    if args.fix_length:
+        nlp = TokenizerSetUp()
+    
+    #os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
+    tokenizer = BertTokenizer.from_pretrained(args.model_name)
+    model = BertForMaskedLM.from_pretrained(args.model_name)
+    if torch.cuda.is_available():
+        args.device = torch.device("cuda", index=int(args.core_id))
+    else:
+        args.device = torch.device("cpu")
     model.to(args.device)
     model.eval()
+    mask_id = tokenizer.encode("[MASK]")[1:-1][0]
 
     # launch chains
     run_chains(args)
