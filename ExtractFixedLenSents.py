@@ -42,9 +42,10 @@ def ExtractSentencesBert(i,folder_path):
             #text = text.encode('ascii','replace').decode('ascii')
             for sent in nlp(text).sents:
                 #Below is to avoid sentences longer than the maximum sequence length for BERT (512 tokens)
-                if len(sent)<50:
-                    if len(bert_tokenizer(sent.text)['input_ids'])==args.num_tokens:
-                        sent_list.append(sent.text+'\n')
+                if len(sent)<20:
+                    sentence = sent.text.strip()
+                    if len(bert_tokenizer(sentence)['input_ids'])==args.num_tokens:
+                        sent_list.append(sentence+'\n')
     return ''.join(sent_list)
 
 def TokenizerSetUp():
@@ -60,13 +61,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--tokenizer', type = str, required = True)
     parser.add_argument('--num_tokens', type = int, required = True)
+    parser.add_argument('--model', type = str, required = True)
     args = parser.parse_args()
     text_path = 'WikiData/Extracted/'
     folder_path_list = glob.glob(f'{text_path}*')
     nlp = TokenizerSetUp()
     if args.tokenizer.lower() == 'bert':
         from transformers import BertTokenizer
-        bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        bert_tokenizer = BertTokenizer.from_pretrained(args.model)
     for folder_path in folder_path_list:
         folder_name = folder_path.replace(text_path,'')
         print(folder_name)
