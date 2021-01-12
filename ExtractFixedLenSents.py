@@ -24,9 +24,8 @@ def ExtractSentences(i,folder_path):
         for page in file:
             text = json.loads(page)['text'].replace('\n',' ')
             #text = text.encode('ascii','replace').decode('ascii')
-            for sent in nlp(text).sents:
-                if len(sent) == args.num_tokens:
-                    sent_list.append(sent.text+'\n')
+            sentences = [sent.text.strip() for sent in nlp(text).sents]
+            sent_list.extend([doc.text+'\n' for doc in nlp.pipe(sentences) if len(doc)==args.num_tokens])
     return ''.join(sent_list)
 
 def ExtractSentencesBert(i,folder_path):
@@ -61,7 +60,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--tokenizer', type = str, required = True)
     parser.add_argument('--num_tokens', type = int, required = True)
-    parser.add_argument('--model', type = str, required = True)
+    parser.add_argument('--model', type = str)
     args = parser.parse_args()
     text_path = 'WikiData/Extracted/'
     folder_path_list = glob.glob(f'{text_path}*')
