@@ -20,8 +20,8 @@ def WriteOut(args,file_name,text_path,nlp):
     sent_num = 0
     sent_id = 0
     doc = LoadCorpus(args,file_name,text_path,nlp,burn_in=False)
-    head = ['sent_id','sentence','num_tokens','seq_len','POS','TAG','DEP']
-    with open(f'textfile/{args.model}/{args.batch_size}_{args.chain_len}/TrackFreq/{file_name}.csv','w') as f:
+    head = ['sent_id','sentence','bert_tokens','spacy_sents','spacy_tokens','POS','TAG','DEP']
+    with open(f'{text_path}TrackFreq/{file_name}.csv','w') as f:
         writer = csv.writer(f)
         writer.writerow(head)
         for line in doc:
@@ -48,23 +48,30 @@ def TrackFreq(line):
     for token in line:
         POSList.append(token.pos_)
         TAGList.append(token.tag_)
-    return [line.text,token_num,seq_len,' '.join(POSList),' '.join(TAGList),total_dist],sent_flag
+    return [line.text,token_num,len(list(line.sents)),seq_len,' '.join(POSList),' '.join(TAGList),total_dist],sent_flag
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--corpus', type = str, required = True)
     parser.add_argument('--model', type = str, required = True)
-    parser.add_argument('--batch_size', type = int, required = True)
-    parser.add_argument('--chain_len', type = int, required = True)
-    parser.add_argument('--sent_sample', type = int, required = True,
+    parser.add_argument('--batch_size', type = int)
+    parser.add_argument('--chain_len', type = int)
+    parser.add_argument('--sent_sample', type = int,
                         help='frequency of recording sentences')
     parser.add_argument('--num_tokens', type = int, default = 13)
     args = parser.parse_args()
     print('running with args', args)
-    args.corpus = 'bert'
-    text_path = f'textfile/{args.model}/{args.batch_size}_{args.chain_len}/bert_gibbs_input_'
-    files = [file_name.replace(f'{text_path}','').replace('.csv','') for file_name in glob.glob(f'{text_path}*.csv')]
+    if args.corpus == 'bert':
+        text_path = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/'
+        files = [file_name.replace(f'{text_path}','').replace('.csv','').replace('bert_gibbs_input_','') for file_name in glob.glob(f'{text_path}*.csv')]
+    elif args.corpus == 'wiki':
+        text_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        files = [file_name.replace(f'{text_path}','').replace('.txt','') for file_name in glob.glob(f'{text_path}*.txt')]
+    os.makedirs(f'{text_path}TrackFreq/',exist_ok=True)
+
+
     nlp = TokenizerSetUp()
     arg = [(args,file_name,text_path,nlp) for file_name in files]
     bert_tokenizer = BertTokenizer.from_pretrained(args.model)
-    with Pool(processes=100) as p:
+    with Pool(processes=48) as p:
         Results = p.starmap(WriteOut,arg)
