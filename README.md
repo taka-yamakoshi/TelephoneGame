@@ -1,6 +1,7 @@
 # TelephoneGame
 informal description of the structure of this repo:
 Since I cannot track all the data directories with git, I describe the intended directory structure here.
+<pre>
 .
 ├── BertData
 │   ├── ...
@@ -45,3 +46,4 @@ Since I cannot track all the data directories with git, I describe the intended 
         ├── 15TokenSents
         ├── ...
         └── 
+</pre>
