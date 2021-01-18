@@ -120,13 +120,16 @@ def run_chains(args) :
         batch_num = len(input_sentences)
 
     # Run the sampling
-    f = f'textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+    os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
+    f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/'\
+        +f'bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
         print(f'Beginning batch {i}')
         time1 = time.time()
         words = input_sentence.capitalize() + "."
         tokenized_sentence = tokenizer(words, return_tensors="pt")
+        assert len(tokenized_sentence["input_ids"][0]) == args.num_tokens, 'number of tokens in the initial sentence does not match the num_tokens argument'
         init_input = (tokenized_sentence["input_ids"][0]
                       .to(args.device)
                       .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
@@ -148,7 +151,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--sentence_id', type = str, required = True)
     parser.add_argument('--core_id', type = str, required = True)
-    parser.add_argument('--model_name', type = str, default = 'bert-base-uncased')
+    parser.add_argument('--model', type = str, default = 'bert-base-uncased')
     parser.add_argument('--batch_size', type=int, default=20, 
                         help='number of sentences to maintain')
     parser.add_argument('--chain_len', type=int, default = 10000, 
@@ -162,7 +165,8 @@ if __name__ == '__main__':
                         help='kind of sampling to do; options include "gibbs"')
     parser.add_argument('--fix_length', type=bool, default = False, 
                         help='if True, resample to avoid changing length')
-
+    parser.add_argument('--num_tokens',type=int, required = True,
+                        help='number of tokens including special tokens')
     args = parser.parse_args()
 
     print('running with args', args)
@@ -171,8 +175,8 @@ if __name__ == '__main__':
         nlp = TokenizerSetUp()
     
     #os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
-    tokenizer = BertTokenizer.from_pretrained(args.model_name)
-    model = BertForMaskedLM.from_pretrained(args.model_name)
+    tokenizer = BertTokenizer.from_pretrained(args.model)
+    model = BertForMaskedLM.from_pretrained(args.model)
     if torch.cuda.is_available():
         args.device = torch.device("cuda", index=int(args.core_id))
     else:

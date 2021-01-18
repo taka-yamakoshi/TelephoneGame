@@ -46,63 +46,66 @@ def ExtractFreq(args,file_name,text_path,nlp):
     '''
         Extract frequency of the specified 'metric' and return dictionary
     '''
-    print(f'Processing {file_name}')
     doc = LoadCorpus(args,file_name,text_path,nlp)
     Freq = {}
     ShortDep = ""
+    sent_num = 0
     for line in doc:
-        if len(bert_tokenizer(line.text)['input_ids']) == args.num_tokens:
-            if args.metric in ['dep','dep_norm']:
-                total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
-                if args.metric == 'dep':
-                    if total_dist in Freq:
-                        Freq[total_dist] += 1
-                    else:
-                        Freq[total_dist] = 1
-                elif args.metric == 'dep_norm':
-                    seq_len = len(line)
-                    if seq_len in Freq:
-                        if total_dist in Freq[seq_len]:
-                            Freq[seq_len][total_dist] += 1
+        if len(list(line.sents)) == 1:
+            if len(bert_tokenizer(line.text)['input_ids']) == args.num_tokens:
+                sent_num += 1
+                if args.metric in ['dep','dep_norm']:
+                    total_dist = np.array([abs(token_pos-token.head.i) for token_pos,token in enumerate(line)]).sum()
+                    if args.metric == 'dep':
+                        if total_dist in Freq:
+                            Freq[total_dist] += 1
                         else:
-                            Freq[seq_len][total_dist] = 1
-                    else:
-                        Freq[seq_len] = {}
-                        Freq[seq_len][total_dist] = 1
-                if total_dist == 10:
-                    ShortDep += line.text+'\n'
-            else:
-                for token in line:
-                    if args.metric in ['vocab', 'pos', 'tag']:
-                        if args.metric == 'vocab':
-                            word = token.text
-                        elif args.metric == 'pos':
-                            word = token.pos_
-                        elif args.metric == 'tag':
-                            word = token.tag_
-                        if word in Freq:
-                            Freq[word] += 1
-                        else:
-                            Freq[word] = 1
-                    elif args.metric in ['pos_vocab', 'tag_vocab']:
-                        if args.metric == 'pos_vocab':
-                            word = token.pos_
-                        elif args.metric == 'tag_vocab':
-                            word = token.tag_
-                        if word in Freq:
-                            if token.text.lower() in Freq[word]:
-                                Freq[word][token.text.lower()] += 1
+                            Freq[total_dist] = 1
+                    elif args.metric == 'dep_norm':
+                        seq_len = len(line)
+                        if seq_len in Freq:
+                            if total_dist in Freq[seq_len]:
+                                Freq[seq_len][total_dist] += 1
                             else:
-                                Freq[word][token.text.lower()] = 1
+                                Freq[seq_len][total_dist] = 1
                         else:
-                            Freq[word] = {}
-                            Freq[word][token.text.lower()] = 1
+                            Freq[seq_len] = {}
+                            Freq[seq_len][total_dist] = 1
+                    if total_dist == 10:
+                        ShortDep += line.text+'\n'
+                else:
+                    for token in line:
+                        if args.metric in ['vocab', 'pos', 'tag']:
+                            if args.metric == 'vocab':
+                                word = token.text
+                            elif args.metric == 'pos':
+                                word = token.pos_
+                            elif args.metric == 'tag':
+                                word = token.tag_
+                            if word in Freq:
+                                Freq[word] += 1
+                            else:
+                                Freq[word] = 1
+                        elif args.metric in ['pos_vocab', 'tag_vocab']:
+                            if args.metric == 'pos_vocab':
+                                word = token.pos_
+                            elif args.metric == 'tag_vocab':
+                                word = token.tag_
+                            if word in Freq:
+                                if token.text.lower() in Freq[word]:
+                                    Freq[word][token.text.lower()] += 1
+                                else:
+                                    Freq[word][token.text.lower()] = 1
+                            else:
+                                Freq[word] = {}
+                                Freq[word][token.text.lower()] = 1
     if args.corpus == 'wiki':
         with open(f'{data_path}CountFiles/{args.metric.upper()}Freq{file_name}.pkl','wb') as f:
             pickle.dump(Freq,f)
     elif args.corpus == 'bert':
         with open(f'{data_path}CountFiles/{args.metric.upper()}FreqBert{file_name}.pkl','wb') as f:
             pickle.dump(Freq,f)
+    print(f'# of sentences for {file_name}: {sent_num}')
     return [Freq,ShortDep]
 
 if __name__ == '__main__':
@@ -110,8 +113,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus', type = str, required = True)
     parser.add_argument('--metric', type = str, required = True)
+    parser.add_argument('--model', type = str, required = True)
     #The rest are only for bert
-    parser.add_argument('--model', type = str)
     parser.add_argument('--batch_size', type = int)
     parser.add_argument('--chain_len', type = int)
     parser.add_argument('--sent_sample', type = int)
@@ -127,20 +130,25 @@ if __name__ == '__main__':
     ##Specify proper paths and gather file names
     if args.corpus == 'bert':
         assert args.chain_len != None and args.batch_size != None and args.sent_sample != None, ''
-        text_path = f'textfile/{args.model}/{args.batch_size}_{args.chain_len}/bert_gibbs_input_'
-        data_path = f'datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/'
+        text_path = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/bert_gibbs_input_'
+        data_path = f'BertData/{args.num_tokens}TokenSents/datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/'
         files = [file_name.replace(f'{text_path}','').replace('.csv','') for file_name in glob.glob(f'{text_path}*.csv')]
     elif args.corpus == 'wiki':
-        text_path = 'WikiData/10WordSents/textfile/'
-        data_path = 'WikiData/10WordSents/datafile/'
+        text_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        data_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/datafile/'
+        os.makedirs(data_path,exist_ok=True)
         files = [file_name.replace(f'{text_path}','').replace('.txt','') for file_name in glob.glob(f'{text_path}*.txt')]
+
+    ##Create output dirs when necessary
+    os.makedirs(f'{data_path}CountFiles/',exist_ok=True)
+    os.makedirs(f'{data_path}ShortDepSents/',exist_ok=True)
 
     ##Set up the spacy tokenizer
     nlp = TokenizerSetUp()
 
     arg = [(args,file_name,text_path,nlp) for file_name in files]
     ##Extract frequency
-    with Pool(processes=100) as p:
+    with Pool(processes=50) as p:
         Results = p.starmap(ExtractFreq,arg)
 
     ##Unify the paralleled dictionary outputs to a single dictionary

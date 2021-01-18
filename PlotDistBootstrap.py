@@ -12,19 +12,6 @@ import argparse
 
 sys.path.append('..')
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--metric', type = str, required = True)
-parser.add_argument('--model', type = str, required = True)
-parser.add_argument('--batch_size', type = int, required = True)
-parser.add_argument('--chain_len', type = int, required = True)
-parser.add_argument('--sent_sample', type = int, required = True)
-args = parser.parse_args()
-print('running with args ', args)
-with open(f'WikiData/10WordSents/datafile/{args.metric.upper()}FreqAll.pkl','rb') as f:
-    wiki_all = pickle.load(f)
-with open(f'datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/{args.metric.upper()}FreqAllBert.pkl','rb') as f:
-    bert_all = pickle.load(f)
-
 def Bootstrap(init_dict,iter_num,metric,specified_order):
     if metric in ['pos','tag','dep']:
         init_list = []
@@ -59,60 +46,76 @@ def CreateListNorm(init_dict):
             init_list.extend([total_dist/seq_len**2 for i in range(value)])
     return init_list
 
-assert args.metric in ['pos','tag','dep','dep_norm'], 'Invalid metric name'
-color_list = sns.color_palette('Set2')
-iter_num = 20
-if args.metric == 'dep':
-    wiki_all_plot = CreatePlotListFromDict(wiki_all,'dep',None)
-    bert_all_plot = CreatePlotListFromDict(bert_all,'dep',None)
-    wiki_bootstrap = Bootstrap(wiki_all,iter_num,'dep',None)
-    bert_bootstrap = Bootstrap(bert_all,iter_num,'dep',None)
-    fig = plt.figure(figsize=(10,5),dpi=200)
-    for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
-        plt.plot(np.arange(len(wiki_bootstrap_iter))+1,wiki_bootstrap_iter,alpha=0.5,color=color_list[2])
-        plt.plot(np.arange(len(bert_bootstrap_iter))+1,bert_bootstrap_iter,alpha=0.5,color=color_list[3])
-    plt.plot(np.arange(len(wiki_all_plot))+1,wiki_all_plot,label='wiki',color=color_list[0])
-    plt.plot(np.arange(len(bert_all_plot))+1,bert_all_plot,label='bert',color=color_list[1])
-    plt.xscale('log')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--metric', type = str, required = True)
+    parser.add_argument('--model', type = str, required = True)
+    parser.add_argument('--batch_size', type = int, required = True)
+    parser.add_argument('--chain_len', type = int, required = True)
+    parser.add_argument('--sent_sample', type = int, required = True)
+    parser.add_argument('--num_tokens',type = int, required = True)
+    args = parser.parse_args()
+    print('running with args ', args)
+    with open(f'WikiData/TokenSents/{args.num_tokens}TokenSents/datafile/{args.metric.upper()}FreqAll.pkl','rb') as f:
+        wiki_all = pickle.load(f)
+    with open(f'BertData/{args.num_tokens}TokenSents/datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/{args.metric.upper()}FreqAllBert.pkl','rb') as f:
+        bert_all = pickle.load(f)
+
+    assert args.metric in ['pos','tag','dep','dep_norm'], 'Invalid metric name'
+    color_list = sns.color_palette('Set2')
+    iter_num = 20
+    if args.metric == 'dep':
+        wiki_all_plot = CreatePlotListFromDict(wiki_all,'dep',None)
+        bert_all_plot = CreatePlotListFromDict(bert_all,'dep',None)
+        wiki_bootstrap = Bootstrap(wiki_all,iter_num,'dep',None)
+        bert_bootstrap = Bootstrap(bert_all,iter_num,'dep',None)
+        fig = plt.figure(figsize=(10,5),dpi=200)
+        for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
+            plt.plot(np.arange(len(wiki_bootstrap_iter))+1,wiki_bootstrap_iter,alpha=0.5,color=color_list[2])
+            plt.plot(np.arange(len(bert_bootstrap_iter))+1,bert_bootstrap_iter,alpha=0.5,color=color_list[3])
+        plt.plot(np.arange(len(wiki_all_plot))+1,wiki_all_plot,label='wiki',color=color_list[0])
+        plt.plot(np.arange(len(bert_all_plot))+1,bert_all_plot,label='bert',color=color_list[1])
+        plt.xscale('log')
+        plt.legend()
+    elif args.metric == 'dep_norm':
+        wiki_all_plot = CreateHist(CreateListNorm(wiki_all))
+        bert_all_plot = CreateHist(CreateListNorm(bert_all))
+        wiki_bootstrap = Bootstrap(wiki_all,iter_num,'dep_norm',None)
+        bert_bootstrap = Bootstrap(bert_all,iter_num,'dep_norm',None)
+        fig = plt.figure(figsize=(10,5),dpi=200)
+        plt.plot(wiki_all_plot[1][:-1],wiki_all_plot[0],label='wiki',color=color_list[0])
+        plt.plot(bert_all_plot[1][:-1],bert_all_plot[0],label='bert',color=color_list[1])
+        for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
+            plt.plot(wiki_bootstrap_iter[1][:-1],wiki_bootstrap_iter[0],alpha=0.5,color=color_list[2])
+            plt.plot(bert_bootstrap_iter[1][:-1],bert_bootstrap_iter[0],alpha=0.5,color=color_list[3])
+        plt.legend()
+    else:
+        key_sets = [set(wiki_all.keys()), set(bert_all.keys())]
+        data_labels = ['wiki_all','bert']
+        for i,set_1 in enumerate(key_sets):
+            for j,set_2 in enumerate(key_sets):
+                print(f'{data_labels[i]} - {data_labels[j]}: {set_1-set_2}')
+        wiki_all_ordered = OrderedDict(wiki_all)
+        wiki_all_ordered = OrderedDict(sorted(wiki_all_ordered.items(), key=lambda x: x[1], reverse=True))
+        labels = list(wiki_all_ordered.keys())
+        if args.metric == 'pos' or args.metric == 'tag':
+            for element in key_sets[0] - key_sets[1]:
+                labels.remove(element)
+        wiki_all_plot = CreatePlotListFromDict(wiki_all,args.metric,labels)
+        bert_all_plot = CreatePlotListFromDict(bert_all,args.metric,labels)
+        wiki_bootstrap = Bootstrap(wiki_all,iter_num,args.metric,labels)
+        bert_bootstrap = Bootstrap(bert_all,iter_num,args.metric,labels)
+        fig = plt.figure(figsize=(10,5),dpi=200)
+        for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
+            plt.plot(np.arange(len(labels)),wiki_bootstrap_iter,alpha=0.5,color=color_list[2])
+            plt.plot(np.arange(len(labels)),bert_bootstrap_iter,alpha=0.5,color=color_list[3])
+        plt.plot(np.arange(len(labels)),wiki_all_plot,color=color_list[0],label='wiki')
+        plt.plot(np.arange(len(labels)),bert_all_plot,color=color_list[1],label='bert')
+        #plt.errorbar(np.arange(len(labels)), np.mean(half_plot_data,axis=0), yerr=np.std(half_plot_data,axis=0), label='wiki_half')
+        #plt.plot(np.arange(len(labels)), np.max(half_plot_data,axis=0), label='wiki_half_max')
+        #plt.plot(np.arange(len(labels)), np.min(half_plot_data,axis=0), label='wiki_half_min')
+        plt.xticks(np.arange(len(labels)),labels,rotation=45,fontsize=7)
     plt.legend()
-elif args.metric == 'dep_norm':
-    wiki_all_plot = CreateHist(CreateListNorm(wiki_all))
-    bert_all_plot = CreateHist(CreateListNorm(bert_all))
-    wiki_bootstrap = Bootstrap(wiki_all,iter_num,'dep_norm',None)
-    bert_bootstrap = Bootstrap(bert_all,iter_num,'dep_norm',None)
-    fig = plt.figure(figsize=(10,5),dpi=200)
-    plt.plot(wiki_all_plot[1][:-1],wiki_all_plot[0],label='wiki',color=color_list[0])
-    plt.plot(bert_all_plot[1][:-1],bert_all_plot[0],label='bert',color=color_list[1])
-    for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
-        plt.plot(wiki_bootstrap_iter[1][:-1],wiki_bootstrap_iter[0],alpha=0.5,color=color_list[2])
-        plt.plot(bert_bootstrap_iter[1][:-1],bert_bootstrap_iter[0],alpha=0.5,color=color_list[3])
-    plt.legend()
-else:
-    key_sets = [set(wiki_all.keys()), set(bert_all.keys())]
-    data_labels = ['wiki_all','bert']
-    for i,set_1 in enumerate(key_sets):
-        for j,set_2 in enumerate(key_sets):
-            print(f'{data_labels[i]} - {data_labels[j]}: {set_1-set_2}')
-    wiki_all_ordered = OrderedDict(wiki_all)
-    wiki_all_ordered = OrderedDict(sorted(wiki_all_ordered.items(), key=lambda x: x[1], reverse=True))
-    labels = list(wiki_all_ordered.keys())
-    if args.metric == 'pos' or args.metric == 'tag':
-        for element in key_sets[0] - key_sets[1]:
-            labels.remove(element)
-    wiki_all_plot = CreatePlotListFromDict(wiki_all,args.metric,labels)
-    bert_all_plot = CreatePlotListFromDict(bert_all,args.metric,labels)
-    wiki_bootstrap = Bootstrap(wiki_all,iter_num,args.metric,labels)
-    bert_bootstrap = Bootstrap(bert_all,iter_num,args.metric,labels)
-    fig = plt.figure(figsize=(10,5),dpi=200)
-    for wiki_bootstrap_iter, bert_bootstrap_iter in zip(wiki_bootstrap,bert_bootstrap):
-        plt.plot(np.arange(len(labels)),wiki_bootstrap_iter,alpha=0.5,color=color_list[2])
-        plt.plot(np.arange(len(labels)),bert_bootstrap_iter,alpha=0.5,color=color_list[3])
-    plt.plot(np.arange(len(labels)),wiki_all_plot,color=color_list[0],label='wiki')
-    plt.plot(np.arange(len(labels)),bert_all_plot,color=color_list[1],label='bert')
-    #plt.errorbar(np.arange(len(labels)), np.mean(half_plot_data,axis=0), yerr=np.std(half_plot_data,axis=0), label='wiki_half')
-    #plt.plot(np.arange(len(labels)), np.max(half_plot_data,axis=0), label='wiki_half_max')
-    #plt.plot(np.arange(len(labels)), np.min(half_plot_data,axis=0), label='wiki_half_min')
-    plt.xticks(np.arange(len(labels)),labels,rotation=45,fontsize=7)
-plt.legend()
-fig.savefig(f'figures/{args.metric.upper()}_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}_Bootstrap.png')
+    fig.savefig(f'figures/{args.metric.upper()}_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}_{args.num_tokens}_Bootstrap.png')
 
