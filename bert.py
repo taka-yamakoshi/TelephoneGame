@@ -47,10 +47,12 @@ class Writer():
                 ])
 
 class UniformGibbs() :
-    def __init__(self, sentences, temp, fix_length) :
+    def __init__(self, sentences, temp, fix_length, model, mask_id) :
         self.sentences = sentences 
         self.fix_length = fix_length
         self.temp = temp
+        self.model = model
+        self.mask_id = mask_id
 
     @torch.no_grad()
     def step(self, iter_num) :
@@ -91,13 +93,13 @@ class UniformGibbs() :
         edit_loc = sentences[:,pos] == chosen_words
         return new_sentences, edit_loc
 
-    def mask_prob (self, position) :
+    def mask_prob(self, position) :
         """
         Predict probability of words at mask position
         """
         masked_sentences = self.sentences.clone()
-        masked_sentences[:, position] = mask_id
-        outputs = model(masked_sentences)
+        masked_sentences[:, position] = self.mask_id
+        outputs = self.model(masked_sentences)
         return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
 
     def get_total_likelihood(self) :
@@ -115,13 +117,13 @@ class UniformGibbs() :
 
 def run_chains(args) :
     # Load sentences
-    with open(f'{args.sentence_id}.txt','r') as f:
+    with open(f'initial_sentences/{args.num_tokens}Tokens/{args.sentence_id}.txt','r') as f:
         input_sentences = f.read().split('\n')[:-1]
         batch_num = len(input_sentences)
 
     # Run the sampling
-    os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
-    f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/'\
+    os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
+    f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
         +f'bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
@@ -135,7 +137,7 @@ def run_chains(args) :
                       .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
         # reset writer 
         writer.reset(i, words)
-        sampler = UniformGibbs(init_input, args.temp, args.fix_length)
+        sampler = UniformGibbs(init_input, args.temp, args.fix_length, model, mask_id)
         for iter_num in range(args.chain_len):
             #print(f'Beginning iteration {iter_num}')
             sampler.step(iter_num)
@@ -151,7 +153,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--sentence_id', type = str, required = True)
     parser.add_argument('--core_id', type = str, required = True)
-    parser.add_argument('--model', type = str, default = 'bert-base-uncased')
+    parser.add_argument('--num_tokens',type=int, required = True,
+                        help='number of tokens including special tokens')
+    parser.add_argument('--model_name', type = str, default = 'bert-base-uncased')
     parser.add_argument('--batch_size', type=int, default=20, 
                         help='number of sentences to maintain')
     parser.add_argument('--chain_len', type=int, default = 10000, 
@@ -165,8 +169,6 @@ if __name__ == '__main__':
                         help='kind of sampling to do; options include "gibbs"')
     parser.add_argument('--fix_length', type=bool, default = False, 
                         help='if True, resample to avoid changing length')
-    parser.add_argument('--num_tokens',type=int, required = True,
-                        help='number of tokens including special tokens')
     args = parser.parse_args()
 
     print('running with args', args)
@@ -175,8 +177,8 @@ if __name__ == '__main__':
         nlp = TokenizerSetUp()
     
     #os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
-    tokenizer = BertTokenizer.from_pretrained(args.model)
-    model = BertForMaskedLM.from_pretrained(args.model)
+    tokenizer = BertTokenizer.from_pretrained(args.model_name)
+    model = BertForMaskedLM.from_pretrained(args.model_name)
     if torch.cuda.is_available():
         args.device = torch.device("cuda", index=int(args.core_id))
     else:

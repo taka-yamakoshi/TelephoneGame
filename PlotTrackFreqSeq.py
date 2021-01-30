@@ -16,12 +16,15 @@ def ExtractTrackFreq(args,file_name,path):
         file = [row for row in reader]
     head = file[0]
     text = file[1:]
-    assert len(text) == num_chain_per_file*extracted_chain_len*args.batch_size
+    assert len(text) == args.num_chain_per_file*args.extracted_chain_len*args.batch_size
     if args.metric == 'spacy_tokens':
-        FreqCount = [[[int(text[chain_num*extracted_chain_len*args.batch_size+args.batch_size*iter+batch_num][head.index('spacy_tokens')]) for iter in range(extracted_chain_len)] for batch_num in range(args.batch_size)] for chain_num in range(num_chain_per_file)]
+        FreqCount = [[[int(text[chain_num*args.extracted_chain_len*args.batch_size+args.batch_size*iter+batch_num][head.index('spacy_tokens')]) for iter in range(args.extracted_chain_len)] for batch_num in range(args.batch_size)] for chain_num in range(args.num_chain_per_file)]
+        return FreqCount
+    elif args.metric == 'prob':
+        FreqCount = [[[float(text[chain_num*args.extracted_chain_len*args.batch_size+args.batch_size*iter+batch_num][head.index('prob')]) for iter in range(args.extracted_chain_len)] for batch_num in range(args.batch_size)] for chain_num in range(args.num_chain_per_file)]
         return FreqCount
     elif args.metric in ['pos','tag']:
-        FreqCount = [[[int(text[chain_num*extracted_chain_len*args.batch_size+args.batch_size*iter+batch_num][head.index(args.metric.upper())]) for iter in range(extracted_chain_len)] for batch_num in range(args.batch_size)] for chain_num in range(num_chain_per_file)]
+        FreqCount = [[[int(text[chain_num*args.extracted_chain_len*args.batch_size+args.batch_size*iter+batch_num][head.index(args.metric.upper())]) for iter in range(args.extracted_chain_len)] for batch_num in range(args.batch_size)] for chain_num in range(args.num_chain_per_file)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -39,6 +42,8 @@ if __name__ == '__main__':
     num_init_sents = 40
     num_chain_per_file = num_init_sents//len(func_args)
     extracted_chain_len = args.chain_len//args.sent_sample
+    args.num_chain_per_file = num_chain_per_file
+    args.extracted_chain_len = extracted_chain_len
     print(f'# of initial sentences per file: {num_chain_per_file}')
     print(f'# of sentences per chain: {extracted_chain_len}')
 

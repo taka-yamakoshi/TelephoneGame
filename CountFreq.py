@@ -36,7 +36,7 @@ def LoadCorpus(args,file_name,text_path,nlp,burn_in=True):
             head = file[0]
             text = file[1:]
         if burn_in:
-            Converged = [TakeOutFuncTokens(row[head.index(f'sentence')]) for row in text if int(row[head.index('iter_num')]) > 1000 and int(row[head.index('iter_num')])%args.sent_sample==0]
+            Converged = [TakeOutFuncTokens(row[head.index(f'sentence')]) for row in text if int(row[head.index('iter_num')]) >= 1000 and int(row[head.index('iter_num')])%args.sent_sample==0]
         else:
             Converged = [TakeOutFuncTokens(row[head.index(f'sentence')]) for row in text if int(row[head.index('iter_num')])%args.sent_sample==0]
         doc = nlp.pipe(Converged)
@@ -114,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('--corpus', type = str, required = True)
     parser.add_argument('--metric', type = str, required = True)
     parser.add_argument('--model', type = str, required = True)
+    parser.add_argument('--temp', type = float, required = True)
     #The rest are only for bert
     parser.add_argument('--batch_size', type = int)
     parser.add_argument('--chain_len', type = int)
@@ -132,7 +133,7 @@ if __name__ == '__main__':
         assert args.chain_len != None and args.batch_size != None and args.sent_sample != None, ''
         text_path = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/bert_gibbs_input_'
         data_path = f'BertData/{args.num_tokens}TokenSents/datafile/{args.model}/{args.batch_size}_{args.chain_len}_{args.sent_sample}/'
-        files = [file_name.replace(f'{text_path}','').replace('.csv','') for file_name in glob.glob(f'{text_path}*.csv')]
+        files = [file_name.replace(f'{text_path}','').replace('.csv','') for file_name in glob.glob(f'{text_path}*_{args.temp}.csv')]
     elif args.corpus == 'wiki':
         text_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/'
         data_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/datafile/'

@@ -42,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type = int)
     parser.add_argument('--chain_len', type = int)
     parser.add_argument('--sent_sample', type = int)
+    parser.add_argument('--temp', type = float)
     parser.add_argument('--iter_num', type = int, default = 20)
     parser.add_argument('--num_tokens', type = int, default = 13)
     args = parser.parse_args()
@@ -50,7 +51,7 @@ if __name__ == '__main__':
         path = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/TrackFreq/'
     elif args.corpus == 'wiki':
         path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/TrackFreq/'
-    files = [file_name.replace(f'{path}','').replace('.csv','') for file_name in glob.glob(f'{path}*.csv')]
+    files = [file_name.replace(f'{path}','').replace('.csv','') for file_name in glob.glob(f'{path}*_{args.temp}.csv')]
     
     func_args = [(args,file_name,path) for file_name in files]
     with Pool(processes=100) as p:
