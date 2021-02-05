@@ -17,27 +17,30 @@ def ExtractSentProbWiki(args,file_name):
         file = [row for row in reader]
     head = file[0]
     text = file[1:]
-    probs = [float(line[head.index('prob_{args.temp}')]) for line in text]
+    probs = [float(line[head.index(f'prob_{args.temp}')]) for line in text]
     return probs
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str)
+    parser.add_argument('--model', type=str, default='bert-base-uncased')
     parser.add_argument('--batch_size', type=int)
     parser.add_argument('--chain_len', type=int)
     parser.add_argument('--sent_sample', type=int)
     parser.add_argument('--num_tokens', type=int)
     parser.add_argument('--temp', type=float)
+    parser.add_argument('--num_init_sents', type=int, default=40)
     args = parser.parse_args()
     print('running with args', args)
+    if args.temp == 1:
+        args.temp = int(args.temp)
     
     #Extract sent probs for BERT
     path = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model}/{args.batch_size}_{args.chain_len}/'
-    files = [file_name.replace(path,'').replace('.csv','') for file_name in glob.glob(f'{path}*.csv')]
+    files = [file_name.replace(path,'').replace('.csv','') for file_name in glob.glob(f'{path}*{args.temp}.csv')]
+    print(f'Using files {", ".join(files)}')
     
     func_args = [(args,file_name,path) for file_name in files]
-    num_init_sents = 40
-    num_chain_per_file = num_init_sents//len(func_args)
+    num_chain_per_file = args.num_init_sents//len(func_args)
     extracted_chain_len = args.chain_len//args.sent_sample
     args.num_chain_per_file = num_chain_per_file
     args.extracted_chain_len = extracted_chain_len
@@ -47,7 +50,7 @@ if __name__ == '__main__':
     
     with Pool(processes=20) as p:
         FreqCountList = p.starmap(ExtractTrackFreq,func_args)
-    BertSentProb = np.array(FreqCountList).reshape((num_init_sents,len(FreqCountList[0][0]),len(FreqCountList[0][0][0])))
+    BertSentProb = np.array(FreqCountList).reshape((args.num_init_sents,len(FreqCountList[0][0]),len(FreqCountList[0][0][0])))
 
     #Extract sent probs for Wikipedia
     path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/SentProbs/'
@@ -64,7 +67,7 @@ if __name__ == '__main__':
     BertSem = np.std(BertSentProb,axis=1)/np.sqrt(BertSentProb.shape[1])
 
     color_list = sns.color_palette('Set2')
-    color_seq = sns.color_palette("coolwarm",n_colors=40)
+    color_seq = sns.color_palette("coolwarm",n_colors=args.num_init_sents)
     fig = plt.figure(figsize=(15,5),dpi=200)
     for chain_num,ave,sem in zip(np.arange(BertSentProb.shape[0]),BertAve,BertSem):
         plt.plot(ave, color=color_seq[chain_num], linewidth=1)
@@ -72,7 +75,8 @@ if __name__ == '__main__':
     plt.plot(WikiAve, color=color_list[0], linewidth=1, label='Wikipedia')
     plt.fill_between(np.arange(extracted_chain_len), WikiAve-WikiSem, WikiAve+WikiSem, color=color_list[0], alpha = 0.5)
     plt.legend()
-    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}.png')
+    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}'\
+                +f'_{args.num_tokens}_{args.temp}.png')
 
     fig = plt.figure(figsize=(15,5),dpi=200)
     for chain_num,FreqCount in enumerate(BertSentProb):
@@ -80,8 +84,10 @@ if __name__ == '__main__':
     plt.plot(WikiAve, color=color_list[0], linewidth=1, label='Wikipedia')
     plt.fill_between(np.arange(extracted_chain_len), WikiAve-WikiSem, WikiAve+WikiSem, color=color_list[0], alpha=0.8)
     plt.legend()
-    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}_all.png')
+    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}'\
+                +f'_{args.num_tokens}_{args.temp}_all.png')
 
+    '''
     fig = plt.figure(figsize=(10,5),dpi=200)
     plt.hist(np.exp(WikiSentProb), bins=np.arange(0,1,0.001), density=True, histtype='step', label='Wikipedia')
     BertAll = BertSentProb[:,:,200:].ravel()
@@ -91,16 +97,20 @@ if __name__ == '__main__':
     plt.hist(np.exp(BertAll), bins=np.arange(0,1,0.001), density=True, histtype='step', label='Bert')
     plt.legend(loc='upper left')
     plt.title(f'Wikipedia range: [{np.min(WikiSentProb)}, {np.max(WikiSentProb)}]\n Bert range: [{np.min(BertAll)}, {np.max(BertAll)}]')
-    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}_hist.png')
+    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}'\
+                +f'_{args.num_tokens}_{args.temp}_hist.png')
+    '''
 
+    min_prob = min([np.amin(WikiSentProb),np.amin(BertSentProb)])//10*10
     fig = plt.figure(figsize=(10,5),dpi=200)
-    plt.hist(WikiSentProb, bins=np.arange(-150,1,1), density=True, histtype='step', label='Wikipedia')
+    plt.hist(WikiSentProb, bins=np.arange(min_prob,1,1), density=True, histtype='step', label='Wikipedia')
     BertAll = BertSentProb[:,:,200:].ravel()
     print(f'# of bert sentences used in the histogram: {len(BertAll)}')
     print(f'Log likelihood for Wikipedia: min {np.min(WikiSentProb)}, max {np.max(WikiSentProb)}')
     print(f'Log likelihood for Bert: min {np.min(BertAll)}, max {np.max(BertAll)}')
-    plt.hist(BertAll, bins=np.arange(-150,1,1), density=True, histtype='step', label='Bert')
+    plt.hist(BertAll, bins=np.arange(min_prob,1,1), density=True, histtype='step', label='Bert')
     plt.yscale('log')
     plt.legend(loc='upper left')
     plt.title(f'Wikipedia range: [{np.min(WikiSentProb)}, {np.max(WikiSentProb)}]\n Bert range: [{np.min(BertAll)}, {np.max(BertAll)}]')
-    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}_hist_log.png')
+    fig.savefig(f'figures/SentProb_{args.model}_{args.batch_size}_{args.chain_len}_{args.sent_sample}'\
+                +f'_{args.num_tokens}_{args.temp}_hist_log.png')
