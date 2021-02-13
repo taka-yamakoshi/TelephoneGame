@@ -1,0 +1,54 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Imports
+
+Dependencies
+
+```{r}
+library(tidyverse)
+library(here)
+library(ggthemes)
+```
+
+Import a chain of generated sentences.
+
+```{r}
+d <- read_csv(here('samplingOutput/bert_gibbs_input_1.1.csv')) %>%
+  group_by(sentence_num, chain_num) %>%
+  mutate(`prevProb_1` = lag(prob),
+         `prevProb_2` = lag(prob, 2),
+         `prevProb_5` = lag(prob, 5),
+         `prevProb_10` = lag(prob, 10),
+         `prevProb_20` = lag(prob, 20),
+         `prevProb_50` = lag(prob, 50),
+         `prevProb_100` = lag(prob, 100),
+         `prevProb_200` = lag(prob, 200),
+         `prevProb_500` = lag(prob, 500),
+         `prevProb_1000` = lag(prob, 1000)) %>%
+  pivot_longer(starts_with('prevProb'), 
+               values_to = 'prevProb', 
+               names_to = 'lag') %>%
+  filter(!is.na(prevProb)) %>%
+  separate(lag, into = c('garbage', 'lag')) %>%
+  mutate(lag = as.integer(lag)) %>%
+  select(-garbage) %>%
+  arrange(sentence_num, chain_num)
+```
+
+```{r}
+ggplot(d, aes(x = exp(prevProb), y = exp(prob))) +
+  geom_point(alpha = 0.05, size = 0.1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ lag) +
+  theme_few()
+```
+
+
+```{r}
+d %>% 
+  group_by(lag) %>%
+  summarize(cor = cor(prob, prevProb))
+```
