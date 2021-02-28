@@ -90,7 +90,7 @@ class UniformGibbs() :
         chosen_words = torch.multinomial(probs, 1).squeeze(-1)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = chosen_words
-        edit_loc = sentences[:,pos] == chosen_words
+        edit_loc = new_sentences[:,pos]!=sentences[:,pos]
         return new_sentences, edit_loc
 
     def mask_prob(self, position) :
@@ -103,17 +103,85 @@ class UniformGibbs() :
         return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
 
     def get_total_likelihood(self) :
-        sent_probs = np.zeros(self.sentences.shape)
+        sent_probs = torch.zeros(self.sentences.shape).to(args.device)
 
         # Why cut off first and last?
         for j in range(1, self.sentences.shape[1] - 1) :
             probs = torch.log(self.mask_prob(j))
             for i in range(self.sentences.shape[0]) :
                 # Look up probability of the actual word at this position
-                sent_probs[i, j] = probs[i, self.sentences[i, j]].item() 
+                sent_probs[i, j] = probs[i, self.sentences[i, j]]
 
         # Sum log probs for each sentence in batch
-        return np.sum(sent_probs, axis=1)
+        return torch.sum(sent_probs, axis=1)
+
+class MultiSiteMH() :
+    def __init__(self, sentences, temp, fix_length, model, mask_id, num_masks) :
+        self.sentences = sentences
+        self.fix_length = fix_length
+        self.temp = temp
+        self.model = model
+        self.mask_id = mask_id
+        self.num_masks = num_masks
+    
+    @torch.no_grad()
+    def step(self, iter_num) :
+        seq_len = self.sentences.shape[1]
+        
+        # exclude first/last tokens (CLS/SEP) from positions
+        mask_pos_list = torch.randperm(seq_len - 2)[:self.num_masks]+1
+        probs = self.mask_prob(mask_pos_list)
+        self.sentences, edit_rate = self.sample_words(probs, mask_pos_list, self.sentences)
+        self.edit_rate = edit_rate.mean(axis=1)
+    
+    def sample_words(self, probs, pos, sentences):
+        old_sent_prob = self.get_total_likelihood()
+        old_words = sentences[:,pos]
+        #Propose a pair of words
+        new_words = torch.tensor([list(torch.multinomial(prob, 1).squeeze(-1)) for prob in probs]).to(args.device)
+        new_sentences = sentences.clone()
+        new_sentences[:,pos] = new_words
+        self.sentences = new_sentences
+        new_sent_prob = self.get_total_likelihood()
+        fwd_prob = torch.tensor([[torch.log(prob[word]).item() for word,prob in zip(word_list,prob_array)]\
+                                     for word_list,prob_array in zip(new_words,probs)]).sum(axis=1).to(args.device)
+        bck_prob = torch.tensor([[torch.log(prob[word]).item() for word,prob in zip(word_list,prob_array)]\
+                                     for word_list,prob_array in zip(old_words,probs)]).sum(axis=1).to(args.device)
+        alpha = torch.exp(new_sent_prob - old_sent_prob + bck_prob - fwd_prob)
+        alpha[alpha>1] = 1
+        accept = torch.rand(sentences.shape[0]).to(args.device)<alpha
+        chosen_words = old_words.clone()
+        chosen_words[accept,:] = new_words[accept,:]
+        chosen_sentences = sentences.clone()
+        chosen_sentences[:,pos] = chosen_words
+        edit_rate = chosen_sentences[:,pos]!=sentences[:,pos]
+        return chosen_sentences, edit_rate.float()
+    
+    def mask_prob(self, position) :
+        """
+            Predict probability of words at mask position
+            This is the same as UniformGibbs.mask_prob
+            """
+        masked_sentences = self.sentences.clone()
+        masked_sentences[:, position] = self.mask_id
+        outputs = self.model(masked_sentences)
+        return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
+    
+    def get_total_likelihood(self) :
+        """
+            This is the same as UniformGibbs.get_total_likelihood
+            """
+        sent_probs = torch.zeros(self.sentences.shape).to(args.device)
+        
+        # Why cut off first and last?
+        for j in range(1, self.sentences.shape[1] - 1) :
+            probs = torch.log(self.mask_prob(j))
+            for i in range(self.sentences.shape[0]) :
+                # Look up probability of the actual word at this position
+                sent_probs[i, j] = probs[i, self.sentences[i, j]]
+    
+        # Sum log probs for each sentence in batch
+        return torch.sum(sent_probs, axis=1)
 
 def run_chains(args) :
     # Load sentences
@@ -124,7 +192,7 @@ def run_chains(args) :
     # Run the sampling
     os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
     f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_{args.sampling_method}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
         print(f'Beginning batch {i}')
@@ -137,15 +205,18 @@ def run_chains(args) :
                       .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
         # reset writer 
         writer.reset(i, words)
-        sampler = UniformGibbs(init_input, args.temp, args.fix_length, model, mask_id)
+        if args.sampling_method == 'gibbs':
+            sampler = UniformGibbs(init_input, args.temp, args.fix_length, model, mask_id)
+        elif args.sampling_method == 'mh':
+            sampler = MultiSiteMH(init_input, args.temp, args.fix_length, model, mask_id, args.num_masks)
         for iter_num in range(args.chain_len):
             #print(f'Beginning iteration {iter_num}')
             sampler.step(iter_num)
             
             # Write out sentences
             if iter_num % args.sent_sample == 0:
-                writer.write(iter_num, sampler.sentences, 
-                             sampler.get_total_likelihood(),sampler.edit_rate)
+                writer.write(iter_num, sampler.sentences,
+                             sampler.get_total_likelihood().cpu().detach().numpy(),sampler.edit_rate)
         time2 = time.time()
         print(f'Time it took for {i}th batch: {time2-time1}')
 
@@ -165,10 +236,12 @@ if __name__ == '__main__':
     parser.add_argument('--sent_sample', type=int, default = 5, 
                         help='frequency of recording sentences')
     parser.add_argument('--sampling_method', type=str, default = 'gibbs', 
-                        choices=['gibbs'],
-                        help='kind of sampling to do; options include "gibbs"')
+                        choices=['gibbs','mh'],
+                        help='kind of sampling to do; options include "gibbs","mh"')
     parser.add_argument('--fix_length', type=bool, default = False, 
                         help='if True, resample to avoid changing length')
+    parser.add_argument('--num_masks', type=int, default = 1,
+                        help='number of positions to sample at one time')
     args = parser.parse_args()
 
     print('running with args', args)
