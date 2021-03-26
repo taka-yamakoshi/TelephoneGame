@@ -11,6 +11,7 @@ import sys
 import os
 import argparse
 import spacy
+import math
 
 
 class Writer():
@@ -204,10 +205,68 @@ class MultiSiteMH() :
                     sampled_sentences = sentences.clone()
                     sampled_sentences[:,site] = sampled_words[:,sample_iter]
                     inv_prob_array[:,sample_iter] = torch.div(torch.ones(sentences.shape[0]).to(args.device),\
-                                                          self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences))
+                                                          self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m))
                 joint_probs[:,iter_id] = torch.div(conditional,inv_prob_array.mean(dim=1))
             return torch.log(joint_probs.mean(dim=1))
-            
+        
+    def get_joint_probability_real(self,sampling_sites,sentences):
+        if len(sampling_sites) == 1:
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
+            return conditional
+        else:
+            random_id = 0
+            site = sampling_sites[random_id]
+            #Calculate the conditional probability
+            probs = self.mask_prob(site,sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
+            inv_prob_array = torch.zeros(probs.shape).to(args.device)
+            assert probs.shape[0]==sentences.shape[0]
+            for batch_id in range(sentences.shape[0]):
+                sampled_sentences = sentences[batch_id].clone().to(args.device).expand((probs.shape[1],-1)).clone()
+                sampled_sentences[:,site] = torch.arange(probs.shape[1]).to(args.device)
+                #We have finite RAM so we need to batchify again 
+                assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
+                new_batch_size = 5000
+                new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
+                for j in range(new_batch_num):
+                    inv_prob_array[batch_id,new_batch_size*j:new_batch_size*(j+1)] = \
+                    torch.div(torch.ones(sampled_sentences[new_batch_size*j:new_batch_size*(j+1)].shape[0]).to(args.device),\
+                              self.get_joint_probability_real(sampling_sites[sampling_sites!=site],\
+                                                              sampled_sentences[new_batch_size*j:new_batch_size*(j+1)]))
+            return torch.log(torch.div(conditional,inv_prob_array.mean(dim=1)))
+        
+    def get_joint_probability_real_new(self,sampling_sites,sentences):
+        if len(sampling_sites) == 1:
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
+            return conditional
+        else:
+            #Random list for which site to factor out
+            random_list = torch.randperm(len(sampling_sites)).to(args.device)
+            joint_probs = torch.zeros(sentences.shape[0],len(sampling_sites)).to(args.device)
+            for iter_id,random_id in enumerate(random_list):
+                site = sampling_sites[random_id]
+                #Calculate the conditional probability
+                probs = self.mask_prob(site,sentences)
+                conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
+                inv_prob_array = torch.zeros(probs.shape).to(args.device)
+                assert probs.shape[0]==sentences.shape[0]
+                for batch_id in range(sentences.shape[0]):
+                    sampled_sentences = sentences[batch_id].clone().to(args.device).expand((probs.shape[1],-1)).clone()
+                    sampled_sentences[:,site] = torch.arange(probs.shape[1]).to(args.device)
+                    #We have finite RAM so we need to batchify again 
+                    assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
+                    new_batch_size = 5000
+                    new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
+                    for j in range(new_batch_num):
+                        inv_prob_array[batch_id,new_batch_size*j:new_batch_size*(j+1)] = \
+                        torch.div(torch.ones(sampled_sentences[new_batch_size*j:new_batch_size*(j+1)].shape[0]).to(args.device),\
+                                  self.get_joint_probability_real(sampling_sites[sampling_sites!=site],\
+                                                                  sampled_sentences[new_batch_size*j:new_batch_size*(j+1)]))
+                joint_probs[:,iter_id] = torch.div(conditional,inv_prob_array.mean(dim=1))
+            print(joint_probs)
+            return torch.log(joint_probs.mean(dim=1))
 
 def run_chains(args) :
     # Load sentences
@@ -217,8 +276,12 @@ def run_chains(args) :
 
     # Run the sampling
     os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
-    f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_{args.sampling_method}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
+    if args.sampling_method == 'gibbs':
+        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
++f'bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+    elif args.sampling_method == 'mh':
+        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
++f'bert_{args.sampling_method}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
         print(f'Beginning batch {i}')
