@@ -1,4 +1,4 @@
-# python joint_prob_test.py --sentence_id input_0 --batch_size 1 --num_tokens 12 --num_masks 1 --core_id 1
+# python bert.py --sentence_id input_1 --core_id 1
 import torch
 import numpy as np
 import pickle
@@ -23,109 +23,47 @@ class JointProbTest() :
         self.model = model
         self.mask_id = mask_id
         self.num_masks = num_masks
-
+    
     @torch.no_grad()
     def get_joint_probs_all(self):
         seq_len = self.sentences.shape[1]
-        out = {}        
-
         # exclude first/last tokens (CLS/SEP) from positions
         mask_pos_list = (torch.randperm(seq_len - 2)[:self.num_masks]+1).to(args.device)
-
+        
+        out_probs = {}
+        sample_size_list = [10,100,1000,10000]
+        for sample_size in sample_size_list:
+            start = time.time()
+            out_probs[f'MC_{sample_size}'] = torch.log(self.get_joint_probability(mask_pos_list,self.sentences,m=sample_size)).to('cpu')
+            print(f"Time it took for MC with {sample_size} {time.time()-start}")
+        
         start = time.time()
-        out['real'] = self.get_joint_probability_real_new(mask_pos_list,self.sentences).to('cpu')
-        print(out)
-        print(f"Time it took for real new: {time.time()-start}")
-
-        # sample_size_list = [10,100,1000,10000]
-        # for sample_size in sample_size_list:
-        #     start = time.time()
-        #     out[f'MC_{sample_size}'] = torch.log(self.get_joint_probability(mask_pos_list,self.sentences,m=sample_size)).to('cpu')
-        #     print(f"Time it took for MC with {sample_size} {time.time()-start}")
+        out_probs['rand_field'] = torch.log(self.get_joint_probability_rand_field(mask_pos_list,self.sentences)).to('cpu')
+        print(f"Time it took for rand_field: {time.time()-start}")
         
-        # start = time.time()
-        # out['rand_field'] = torch.log(self.get_joint_probability_rand_field(mask_pos_list,self.sentences)).to('cpu')
-        # print(f"Time it took for rand_field: {time.time()-start}")
+        start = time.time()
+        out_probs['mask'] = torch.log(self.get_joint_probability_mask(mask_pos_list,self.sentences)).to('cpu')
+        print(f"Time it took for mask: {time.time()-start}")
         
-        # start = time.time()
-        # out['mask'] = torch.log(self.get_joint_probability_mask(mask_pos_list,self.sentences)).to('cpu')
-        # print(f"Time it took for mask: {time.time()-start}")
-                
-        # start = time.time()
-        # out['real_new'] = torch.log(self.get_joint_probability_real_new(mask_pos_list,self.sentences)).to('cpu')
-        # print(f"Time it took for real_new: {time.time()-start}")
-        return out,mask_pos_list.to('cpu')
-
-    def get_joint_logprobability_real(self,sampling_sites,sentences):
-        '''
-        Calculate the "real" joint probability by taking the actual sum over the entire vocabulary
-        Not practical for more than two sites
-        '''
-        # When sampling at a single site, return conditional
-        if len(sampling_sites) == 1:
-            logprobs = self.mask_prob(sampling_sites.item(), sentences)
-            true_word = sentences[:,sampling_sites.item()]
-            # print(torch.diagonal(torch.index_select(logprobs, 1, true_word)))
-            # print(torch.tensor([logprob[word].item() for logprob,word in zip(logprobs,sentences[:,sampling_sites.item()])]).to(args.device))
-            # return torch.index_select(logprobs, 1, true_word[0]).squeeze()
-            return torch.diagonal(torch.index_select(logprobs, dim=1, index=true_word))
+        start = time.time()
+        out_probs['real'] = torch.log(self.get_joint_probability_real(mask_pos_list,self.sentences)).to('cpu')
+        print(f"Time it took for real: {time.time()-start}")
         
-        # When sampling at more than one site, use joint probability with one less site
-        else:
-            # Always factor out the first site for this implementation
-            random_id = 0
-            site = sampling_sites[random_id]
+        start = time.time()
+        out_probs['real_new'] = torch.log(self.get_joint_probability_real_new(mask_pos_list,self.sentences)).to('cpu')
+        print(f"Time it took for real_new: {time.time()-start}")
 
-            # Calculate the conditional probability of the word at this site
-            conditional = self.get_joint_logprobability_real(site.unsqueeze(0), sentences)
-            logprobs = self.mask_prob(site,sentences)
-            vocab_size = logprobs.shape[1]
-            inv_prob_array = torch.zeros(logprobs.shape).to(args.device)
-            assert logprobs.shape[0]==sentences.shape[0]
-            
-            # Loop through sentences in a batch
-            for i in range(sentences.shape[0]):
-                # Create every possible sentences, spanning the entire vocabulary
-                sampled_sentences = sentences[i].clone().to(args.device).expand((vocab_size,-1)).clone()
-                sampled_sentences[:,site] = torch.arange(vocab_size).to(args.device)
-                
-                # We have finite RAM so we need to batchify again
-                assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
-                if args.num_tokens <= 10:
-                    new_batch_size = 2000
-                elif args.num_tokens <= 20:
-                    new_batch_size = 1000
-                elif args.num_tokens <= 30:
-                    new_batch_size = 500
-                new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
-                
-                # Go through new batches
-                for j in range(new_batch_num):
-                    # Note we are using "logprobs" in the numerator
-                    other_sites = sampling_sites[sampling_sites!=site]
-                    batch = sampled_sentences[new_batch_size*j:new_batch_size*(j+1)]
-                    term1 = logprobs[i,new_batch_size*j:new_batch_size*(j+1)]
-                    term2 = self.get_joint_logprobability_real(other_sites, batch)
-                    inv_prob_array[i,new_batch_size*j:new_batch_size*(j+1)] = term1 - term2
-
-            # Note this is "sum" and not "mean"
-            print('numerator', conditional)
-            print('denominator', torch.logsumexp(inv_prob_array, 1))
-            return conditional - torch.logsumexp(inv_prob_array, 1)
+        return out_probs,mask_pos_list.to('cpu')
     
     def mask_prob(self, position, sentences):
-        """Predict probability of words at mask position.
-
-        This is the same as UniformGibbs.mask_prob, but taking sentences as input
         """
+            Predict probability of words at mask position
+            This is the same as UniformGibbs.mask_prob, except there is an additional input argument: sentences
+            """
         masked_sentences = sentences.clone()
         masked_sentences[:, position] = self.mask_id
-        outputs = self.model(masked_sentences)[0]
-        # if(sentences.shape[0] > 1) :
-        #     print('masked output for sentence 1 in batch', outputs[0, position])
-        #     print('diff pred b/w sentences in batch',
-        #     torch.sum((outputs[0, position] - outputs[1, position])))
-        return F.log_softmax(outputs[:, position] / self.temp, dim = -1)
+        outputs = self.model(masked_sentences)
+        return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
     
     def get_total_likelihood(self):
         """
@@ -135,7 +73,7 @@ class JointProbTest() :
         
         # Why cut off first and last? -- We are not talking into accout how likely we see special tokens at the beggining and the end
         for j in range(1, self.sentences.shape[1] - 1) :
-            probs = self.mask_prob(j,self.sentences)
+            probs = torch.log(self.mask_prob(j,self.sentences))
             for i in range(self.sentences.shape[0]) :
                 # Look up probability of the actual word at this position
                 sent_probs[i, j] = probs[i, self.sentences[i, j]]
@@ -149,8 +87,8 @@ class JointProbTest() :
             '''
         # When sampling at a single site, return conditional
         if len(sampling_sites) == 1:
-            logprobs = self.mask_prob(sampling_sites.item(),sentences)
-            conditional = torch.tensor([logprob[word].item() for logprob,word in zip(logprobs,sentences[:,sampling_sites.item()])]).to(args.device)
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
             return conditional
         
         # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
@@ -179,11 +117,11 @@ class JointProbTest() :
                     sampled_sentences[:,site] = sampled_words[:,sample_iter]
                     
                     # Express the probability in terms of joint probability with one less sites
-                    inv_prob_array[:,sample_iter] = torch.exp(-self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m))
+                    inv_prob_array[:,sample_iter] = torch.exp(-torch.log(self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m)))
                 
                 assert torch.all(inv_prob_array!=0)
                 # Approximate expectation by taking the average over Monte-Carlo samples
-                joint_probs[:,iter_id] = torch.exp(conditional-torch.log(inv_prob_array.mean(dim=1)))
+                joint_probs[:,iter_id] = torch.exp(torch.log(conditional)-torch.log(inv_prob_array.mean(dim=1)))
             # Take the average over different ways to factor out sites
             return joint_probs.mean(dim=1)
     
@@ -193,8 +131,8 @@ class JointProbTest() :
             '''
         # When sampling at a single site, return conditional
         if len(sampling_sites) == 1:
-            logprobs = self.mask_prob(sampling_sites.item(),sentences)
-            conditional = torch.tensor([prob[word].item() for prob,word in zip(logprobs,sentences[:,sampling_sites.item()])]).to(args.device)
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
             return conditional
         
         # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
@@ -222,17 +160,66 @@ class JointProbTest() :
                     new_sampled_words = torch.nonzero(sampled_words[i,:].bincount()).squeeze(dim=1)
                     sampled_sentences = sentences[i].clone().to(args.device).expand((len(new_sampled_words),-1)).clone()
                     sampled_sentences[:,site] = new_sampled_words
-                    new_inv_prob_array = torch.exp(-self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m))
+                    new_inv_prob_array = torch.exp(-torch.log(self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m)))
                     inv_prob_array_emb = torch.zeros(probs.shape[1])
                     for word_id, word in enumerate(new_sampled_words):
                         inv_prob_array_emb[word] = new_inv_prob_array[word_id]
                     inv_prob_array[i,:] = inv_prob_array_emb[sampled_words[i,:]]
                 assert torch.all(inv_prob_array!=0)
                 # Approximate expectation by taking the average over Monte-Carlo samples
-                joint_probs[:,iter_id] = torch.exp(conditional-torch.log(inv_prob_array.mean(dim=1)))
+                joint_probs[:,iter_id] = torch.exp(torch.log(conditional)-torch.log(inv_prob_array.mean(dim=1)))
             # Take the average over different ways to factor out sites
             return joint_probs.mean(dim=1)
         
+    def get_joint_probability_real(self,sampling_sites,sentences):
+        '''
+            Calculate the "real" joint probability by taking the actual sum over the entire vocabulary
+            Not practical for more than two sites
+            '''
+        # When sampling at a single site, return conditional
+        if len(sampling_sites) == 1:
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
+            return conditional
+        
+        # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
+        else:
+            # Always factor out the first site for this implementation
+            random_id = 0
+            site = sampling_sites[random_id]
+            
+            # Calculate the conditional probability
+            probs = self.mask_prob(site,sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
+            inv_prob_array = torch.zeros(probs.shape).to(args.device)
+            assert probs.shape[0]==sentences.shape[0]
+            
+            # Loop through sentences in a batch
+            for i in range(sentences.shape[0]):
+                # Create every possible sentences, spanning the entire vocabulary
+                sampled_sentences = sentences[i].clone().to(args.device).expand((probs.shape[1],-1)).clone()
+                sampled_sentences[:,site] = torch.arange(probs.shape[1]).to(args.device)
+                
+                # We have finite RAM so we need to batchify again
+                assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
+                if args.num_tokens <= 10:
+                    new_batch_size = 5000
+                elif args.num_tokens <= 20:
+                    new_batch_size = 2500
+                elif args.num_tokens <= 30:
+                    new_batch_size = 1500
+                new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
+                
+                # Go through new batches
+                for j in range(new_batch_num):
+                    # Note we are using "probs" in the numerator
+                    inv_prob_array[i,new_batch_size*j:new_batch_size*(j+1)] = \
+                    torch.exp(torch.log(probs[i,new_batch_size*j:new_batch_size*(j+1)])\
+                              -torch.log(self.get_joint_probability_real(sampling_sites[sampling_sites!=site],\
+                                                                         sampled_sentences[new_batch_size*j:new_batch_size*(j+1)])))
+
+            # Note this is "sum" and not "mean"
+            return torch.exp(torch.log(conditional)-torch.log(inv_prob_array.sum(dim=1)))
         
     def get_joint_probability_real_new(self,sampling_sites,sentences):
         '''
@@ -242,9 +229,9 @@ class JointProbTest() :
             '''
         # When sampling at a single site, return conditional
         if len(sampling_sites) == 1:
-            logprobs = self.mask_prob(sampling_sites.item(), sentences)
-            true_word = sentences[:,sampling_sites.item()]
-            return torch.diagonal(torch.index_select(logprobs, dim=1, index=true_word))
+            probs = self.mask_prob(sampling_sites.item(),sentences)
+            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
+            return conditional
         
         # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
         else:
@@ -259,8 +246,8 @@ class JointProbTest() :
                 new_sampling_sites = sampling_sites.clone()
                 new_sampling_sites[0] = site
                 new_sampling_sites[1:] = sampling_sites[sampling_sites!=site]
-                joint_probs[:,iter_id] = self.get_joint_logprobability_real(new_sampling_sites,sentences)
-            print(joint_probs)
+                joint_probs[:,iter_id] = self.get_joint_probability_real(new_sampling_sites,sentences)
+            print(torch.log(joint_probs))
             return joint_probs.mean(dim=1)
         
     def get_joint_probability_rand_field(self,sampling_sites,sentences):
@@ -270,7 +257,7 @@ class JointProbTest() :
         probs = self.mask_prob(sampling_sites,sentences)
         conditionals = torch.tensor([[probs[batch_id,site_id,word] for batch_id,word in enumerate(sentences[:,site])]\
                                      for site_id,site in enumerate(sampling_sites)]).to(args.device)
-        return torch.exp(conditionals.sum(dim=0))
+        return torch.exp(torch.log(conditionals).sum(dim=0))
 
     def get_joint_probability_mask(self,sampling_sites,sentences):
         '''
