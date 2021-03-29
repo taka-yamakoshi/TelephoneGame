@@ -1,4 +1,4 @@
-# python joint_prob_test.py --sentence_id input_0 --batch_size 1 --num_tokens 12 --num_masks 1 --core_id 1
+# python joint_prob_test.py --sentence_id input_0 --batch_size 1 --num_tokens 12 --num_masks 2 --core_id 1
 import torch
 import numpy as np
 import pickle
@@ -33,7 +33,7 @@ class JointProbTest() :
         mask_pos_list = (torch.randperm(seq_len - 2)[:self.num_masks]+1).to(args.device)
 
         start = time.time()
-        out['real'] = self.get_joint_probability_real_new(mask_pos_list,self.sentences).to('cpu')
+        out['real'] = self.get_joint_probability_bidirectional(mask_pos_list,self.sentences).to('cpu')
         print(out)
         print(f"Time it took for real new: {time.time()-start}")
 
@@ -56,6 +56,28 @@ class JointProbTest() :
         # print(f"Time it took for real_new: {time.time()-start}")
         return out,mask_pos_list.to('cpu')
 
+    def get_joint_probability_bidirectional(self,sampling_sites,sentences):
+        '''
+            Calculate the "real" joint probability by taking the actual sum over the entire vocabulary
+            Averaging multiple ways of factoring out
+            Not practical for more than two sites
+        '''
+        # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
+        # Random list for which site to factor out
+        random_list = torch.randperm(len(sampling_sites)).to(args.device)
+        joint_probs = torch.zeros(sentences.shape[0],len(sampling_sites)).to(args.device)
+        
+        # Loop through different ways to factor out sites
+        for iter_id,random_id in enumerate(random_list):
+            # Pick a site to factor out
+            site = sampling_sites[random_id]
+            new_sampling_sites = sampling_sites.clone()
+            new_sampling_sites[0] = site
+            new_sampling_sites[1:] = sampling_sites[sampling_sites != site]
+            joint_probs[:,iter_id] = self.get_joint_logprobability_real(new_sampling_sites,sentences)
+        print('two directions', joint_probs)
+        return joint_probs.mean(dim=1)
+
     def get_joint_logprobability_real(self,sampling_sites,sentences):
         '''
         Calculate the "real" joint probability by taking the actual sum over the entire vocabulary
@@ -65,14 +87,11 @@ class JointProbTest() :
         if len(sampling_sites) == 1:
             logprobs = self.mask_prob(sampling_sites.item(), sentences)
             true_word = sentences[:,sampling_sites.item()]
-            # print(torch.diagonal(torch.index_select(logprobs, 1, true_word)))
-            # print(torch.tensor([logprob[word].item() for logprob,word in zip(logprobs,sentences[:,sampling_sites.item()])]).to(args.device))
-            # return torch.index_select(logprobs, 1, true_word[0]).squeeze()
             return torch.diagonal(torch.index_select(logprobs, dim=1, index=true_word))
         
         # When sampling at more than one site, use joint probability with one less site
         else:
-            # Always factor out the first site for this implementation
+            # Always factor out the first site
             random_id = 0
             site = sampling_sites[random_id]
 
@@ -109,8 +128,8 @@ class JointProbTest() :
                     inv_prob_array[i,new_batch_size*j:new_batch_size*(j+1)] = term1 - term2
 
             # Note this is "sum" and not "mean"
-            print('numerator', conditional)
-            print('denominator', torch.logsumexp(inv_prob_array, 1))
+            print('conditional', conditional)
+            print('logsumexp', torch.logsumexp(inv_prob_array, 1))
             return conditional - torch.logsumexp(inv_prob_array, 1)
     
     def mask_prob(self, position, sentences):
@@ -121,10 +140,6 @@ class JointProbTest() :
         masked_sentences = sentences.clone()
         masked_sentences[:, position] = self.mask_id
         outputs = self.model(masked_sentences)[0]
-        # if(sentences.shape[0] > 1) :
-        #     print('masked output for sentence 1 in batch', outputs[0, position])
-        #     print('diff pred b/w sentences in batch',
-        #     torch.sum((outputs[0, position] - outputs[1, position])))
         return F.log_softmax(outputs[:, position] / self.temp, dim = -1)
     
     def get_total_likelihood(self):
@@ -233,36 +248,6 @@ class JointProbTest() :
             # Take the average over different ways to factor out sites
             return joint_probs.mean(dim=1)
         
-        
-    def get_joint_probability_real_new(self,sampling_sites,sentences):
-        '''
-            Calculate the "real" joint probability by taking the actual sum over the entire vocabulary
-            Averaging multiple ways of factoring out
-            Not practical for more than two sites
-            '''
-        # When sampling at a single site, return conditional
-        if len(sampling_sites) == 1:
-            logprobs = self.mask_prob(sampling_sites.item(), sentences)
-            true_word = sentences[:,sampling_sites.item()]
-            return torch.diagonal(torch.index_select(logprobs, dim=1, index=true_word))
-        
-        # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
-        else:
-            # Random list for which site to factor out
-            random_list = torch.randperm(len(sampling_sites)).to(args.device)
-            joint_probs = torch.zeros(sentences.shape[0],len(sampling_sites)).to(args.device)
-            
-            # Loop through different ways to factor out sites
-            for iter_id,random_id in enumerate(random_list):
-                # Pick a site to factor out
-                site = sampling_sites[random_id]
-                new_sampling_sites = sampling_sites.clone()
-                new_sampling_sites[0] = site
-                new_sampling_sites[1:] = sampling_sites[sampling_sites!=site]
-                joint_probs[:,iter_id] = self.get_joint_logprobability_real(new_sampling_sites,sentences)
-            print(joint_probs)
-            return joint_probs.mean(dim=1)
-        
     def get_joint_probability_rand_field(self,sampling_sites,sentences):
         '''
             Calculate the joint probability in the Markov Random Field way
@@ -299,6 +284,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--sentence_id', type = str, required = True)
     parser.add_argument('--core_id', type = str, required = True)
+    parser.add_argument('--local_path', dest='local_path', action='store_true')
     parser.add_argument('--num_tokens',type=int, required = True,
                         help='number of tokens including special tokens')
     parser.add_argument('--model_name', type = str, default = 'bert-base-uncased')
@@ -315,11 +301,10 @@ if __name__ == '__main__':
     parser.add_argument('--sample_size',type=int, default = 10,
                         help='the sample_size for MC')
     '''
+    parser.set_defaults(local_path=False)
     args = parser.parse_args()
 
     print('running with args', args)
-    
-    #os.environ["CUDA_VISIBLE_DEVICES"] = args.core_id
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
     model = BertForMaskedLM.from_pretrained(args.model_name)
     if torch.cuda.is_available():
@@ -330,7 +315,8 @@ if __name__ == '__main__':
     model.eval()
     mask_id = tokenizer.encode("[MASK]")[1:-1][0]
 
-    with open(f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/{args.sentence_id}.txt','r') as f:
+    path = '' if args.local_path else 'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/'
+    with open(f'{path}{args.sentence_id}.txt','r') as f:
         loaded_sentences = f.read().split('\n')[:-1]
 
     sentences = loaded_sentences[:args.batch_size]
