@@ -23,7 +23,8 @@ class Writer():
 
     def init_output_csv(self, header=None):
         header = ['sentence_num','chain_num','iter_num',
-                  'initial_sentence', 'sentence', 'prob', 'edit_rate']
+                  'initial_sentence', 'sentence', 'prob',
+                  'edit_rate', 'step_sampling_method']
         with open(self.save_file, "w") as writeFile:
             csv.writer(writeFile).writerow(header)
 
@@ -31,12 +32,12 @@ class Writer():
         self.init_sent = init_sent
         self.sentence_num = sentence_num
 
-    def write(self, iter_num, sentences, probs, edit_rate):
+    def write(self, iter_num, sentences, probs, edit_rate, sampling_method):
         with open(self.save_file, "a") as writeFile:
             csvwriter = csv.writer(writeFile)
             decoded_sentences = [str(tokenizer.decode(sentence)) 
                                  for sentence in sentences]
-            if iter_num%1000==0:
+            if iter_num%100==0:
                 print(iter_num)
                 print(decoded_sentences)
                 print(probs)
@@ -44,7 +45,8 @@ class Writer():
             for row_id, sentence in enumerate(decoded_sentences) :
                 csvwriter.writerow([
                     self.sentence_num, row_id, iter_num, 
-                    self.init_sent, sentence, probs[row_id], edit_rate[row_id].item()
+                    self.init_sent, sentence, probs[row_id],
+                    edit_rate[row_id].item(), sampling_method
                 ])
 
 class UniformGibbs() :
@@ -54,9 +56,11 @@ class UniformGibbs() :
         self.temp = temp
         self.model = model
         self.mask_id = mask_id
+        self.step_sampling_method = 'gibbs'
 
     @torch.no_grad()
     def step(self, iter_num) :
+        #start = time.time()
         seq_len = self.sentences.shape[1]
 
         # exclude first/last tokens (CLS/SEP) from positions
@@ -86,9 +90,10 @@ class UniformGibbs() :
                         break
             edit_locs[:,pos_id] = edit_loc
         self.edit_rate = torch.mean(edit_locs,axis=1)
+        #print(f'Time for a single step for Gibbs: {time.time()-start}')
 
     def sample_words(self, probs, pos, sentences):
-        chosen_words = torch.multinomial(probs, 1).squeeze(-1)
+        chosen_words = torch.multinomial(torch.exp(probs), 1).squeeze(-1)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = chosen_words
         edit_loc = new_sentences[:,pos]!=sentences[:,pos]
@@ -101,14 +106,14 @@ class UniformGibbs() :
         masked_sentences = self.sentences.clone()
         masked_sentences[:, position] = self.mask_id
         outputs = self.model(masked_sentences)
-        return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
+        return F.log_softmax(outputs[0][:, position] / self.temp, dim = -1)
 
     def get_total_likelihood(self):
         sent_probs = torch.zeros(self.sentences.shape).to(args.device)
 
         # Why cut off first and last?
         for j in range(1, self.sentences.shape[1] - 1) :
-            probs = torch.log(self.mask_prob(j))
+            probs = self.mask_prob(j)
             for i in range(self.sentences.shape[0]) :
                 # Look up probability of the actual word at this position
                 sent_probs[i, j] = probs[i, self.sentences[i, j]]
@@ -117,16 +122,19 @@ class UniformGibbs() :
         return torch.sum(sent_probs, axis=1)
 
 class MultiSiteMH() :
-    def __init__(self, sentences, temp, fix_length, model, mask_id, num_masks) :
+    def __init__(self, sentences, temp, fix_length, model, mask_id, num_masks, mc_sample_size) :
         self.sentences = sentences
         self.fix_length = fix_length
         self.temp = temp
         self.model = model
         self.mask_id = mask_id
         self.num_masks = num_masks
+        self.step_sampling_method = 'mh'
+        self.mc_sample_size = mc_sample_size
     
     @torch.no_grad()
     def step(self, iter_num) :
+        start = time.time()
         seq_len = self.sentences.shape[1]
         
         # exclude first/last tokens (CLS/SEP) from positions
@@ -134,18 +142,19 @@ class MultiSiteMH() :
         probs = self.mask_prob(mask_pos_list,self.sentences)
         self.sentences, edit_rate = self.sample_words(probs, mask_pos_list, self.sentences)
         self.edit_rate = edit_rate.mean(axis=1)
+        print(f'Time for a single step for MH: {time.time()-start}')
     
     def sample_words(self, probs, pos, sentences):
-        old_joint_prob = self.get_joint_probability(pos,sentences)
+        old_joint_prob = self.get_joint_logprobability(pos,sentences,self.mc_sample_size)
         old_words = sentences[:,pos]
         #Propose a set of words
-        new_words = torch.tensor([list(torch.multinomial(prob, 1).squeeze(-1)) for prob in probs]).to(args.device)
+        new_words = torch.tensor([list(torch.multinomial(prob, 1).squeeze(-1)) for prob in torch.exp(probs)]).to(args.device)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = new_words
-        new_joint_prob = self.get_joint_probability(pos,new_sentences)
-        fwd_prob = torch.tensor([[torch.log(prob[word]).item() for word,prob in zip(word_list,prob_array)]\
+        new_joint_prob = self.get_joint_logprobability(pos,new_sentences,self.mc_sample_size)
+        fwd_prob = torch.tensor([[prob[word].item() for word,prob in zip(word_list,prob_array)]\
                                      for word_list,prob_array in zip(new_words,probs)]).sum(axis=1).to(args.device)
-        bck_prob = torch.tensor([[torch.log(prob[word]).item() for word,prob in zip(word_list,prob_array)]\
+        bck_prob = torch.tensor([[prob[word].item() for word,prob in zip(word_list,prob_array)]\
                                      for word_list,prob_array in zip(old_words,probs)]).sum(axis=1).to(args.device)
         alpha = torch.exp(new_joint_prob - old_joint_prob + bck_prob - fwd_prob)
         alpha[alpha>1] = 1
@@ -156,16 +165,16 @@ class MultiSiteMH() :
         chosen_sentences[:,pos] = chosen_words
         edit_rate = chosen_sentences[:,pos]!=sentences[:,pos]
         return chosen_sentences, edit_rate.float()
-    
+
     def mask_prob(self, position, sentences):
         """
-            Predict probability of words at mask position
-            This is the same as UniformGibbs.mask_prob, except the input now includes sentences
+            Predict probability of words at mask position.
+            This is the same as UniformGibbs.mask_prob, but taking sentences as input
             """
         masked_sentences = sentences.clone()
         masked_sentences[:, position] = self.mask_id
         outputs = self.model(masked_sentences)
-        return F.softmax(outputs[0][:, position] / self.temp, dim = -1)
+        return F.log_softmax(outputs[0][:, position] / self.temp, dim = -1)
     
     def get_total_likelihood(self):
         """
@@ -175,98 +184,124 @@ class MultiSiteMH() :
         
         # Why cut off first and last?
         for j in range(1, self.sentences.shape[1] - 1) :
-            probs = torch.log(self.mask_prob(j,self.sentences))
+            probs = self.mask_prob(j,self.sentences)
             for i in range(self.sentences.shape[0]) :
                 # Look up probability of the actual word at this position
                 sent_probs[i, j] = probs[i, self.sentences[i, j]]
     
         # Sum log probs for each sentence in batch
         return torch.sum(sent_probs, axis=1)
-    
-    def get_joint_probability(self,sampling_sites,sentences,m=10):
+
+    def get_joint_logprobability(self,sampling_sites,sentences,m):
+        '''
+            Calculate joint probability of a batch of sentences using Monte-Carlo approximation
+            '''
+        # When sampling at a single site, return conditional
         if len(sampling_sites) == 1:
-            probs = self.mask_prob(sampling_sites.item(),sentences)
-            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
-            return conditional
+            logprobs = self.mask_prob(sampling_sites.item(), sentences)
+            true_word = sentences[:,sampling_sites.item()]
+            return torch.diagonal(torch.index_select(logprobs, dim=1, index=true_word))
+        
+        # When sampling at more than one site, express joint probability in terms of joint probability with one less sites
         else:
-            #Random list for which site to factor out
+            # Random list for which site to factor out
             random_list = torch.randperm(len(sampling_sites)).to(args.device)
             joint_probs = torch.zeros(sentences.shape[0],len(sampling_sites)).to(args.device)
+            
+            # Loop through different ways to factor out sites
             for iter_id, random_id in enumerate(random_list):
-                #Pick a site to factor out
+                # Pick a site to factor out
                 site = sampling_sites[random_id]
-                #Calculate the conditional probability
-                probs = self.mask_prob(site,sentences)
-                conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
-                #Sample for Monte-Carlo
-                sampled_words = torch.tensor([list(torch.multinomial(prob, m, replacement=True).squeeze(-1)) for prob in probs]).to(args.device)
+                
+                # Calculate the conditional probability
+                conditional = self.get_joint_logprobability(site.unsqueeze(0),sentences,self.mc_sample_size)
+                logprobs = self.mask_prob(site,sentences)
+                
+                # Sample for Monte-Carlo
+                sampled_words = torch.tensor([list(torch.multinomial(torch.exp(logprob), m, replacement=True).squeeze(-1))\
+                                              for logprob in logprobs]).to(args.device)
                 inv_prob_array = torch.zeros(sampled_words.shape).to(args.device)
-                for sample_iter in range(m):
-                    sampled_sentences = sentences.clone()
-                    sampled_sentences[:,site] = sampled_words[:,sample_iter]
-                    inv_prob_array[:,sample_iter] = torch.div(torch.ones(sentences.shape[0]).to(args.device),\
-                                                          self.get_joint_probability(sampling_sites[sampling_sites!=site],sampled_sentences,m))
-                joint_probs[:,iter_id] = torch.div(conditional,inv_prob_array.mean(dim=1))
-            return torch.log(joint_probs.mean(dim=1))
+                
+                for i in range(sentences.shape[0]):
+                    # Remove the duplicates
+                    new_sampled_words = torch.nonzero(sampled_words[i,:].bincount()).squeeze(dim=1)
+                    sampled_sentences = sentences[i].clone().to(args.device).expand((len(new_sampled_words),-1)).clone()
+                    sampled_sentences[:,site] = new_sampled_words
+                    new_inv_prob_array = -self.get_joint_logprobability(sampling_sites[sampling_sites!=site],sampled_sentences,self.mc_sample_size)
+                    inv_prob_array_emb = torch.zeros(logprobs.shape[1])
+                    for word_id, word in enumerate(new_sampled_words):
+                        inv_prob_array_emb[word] = new_inv_prob_array[word_id]
+                    inv_prob_array[i,:] = inv_prob_array_emb[sampled_words[i,:]]
+                # assert torch.all(inv_prob_array!=0)
+                # Approximate expectation by taking the average over Monte-Carlo samples
+                inv_prob_array_mean = torch.logsumexp(inv_prob_array,dim=1)-torch.log(torch.tensor([inv_prob_array.shape[1]]).float().to(args.device))
+                joint_probs[:,iter_id] = conditional-inv_prob_array_mean
+            # Take the average over different ways to factor out sites
+            return joint_probs.mean(dim=1)
+
+class MixModel():
+    def __init__(self, sentences, temp, fix_length, model, mask_id, num_masks, mix_method, threshold, mc_sample_size) :
+        self.sentences = sentences
+        self.fix_length = fix_length
+        self.temp = temp
+        self.model = model
+        self.mask_id = mask_id
+        self.num_masks = num_masks
+        self.mix_method = mix_method
+        # Perform Gibbs sampling first
+        self.step_sampling_method = 'gibbs'
+        self.threshold = threshold
+        self.mc_sample_size = mc_sample_size
+
+    @torch.no_grad()
+    def step(self,iter_num):
+        # Decide the sampling method
+        if iter_num < 1000:
+            self.step_sampling_method = 'gibbs'
+
+        elif self.mix_method == 'random':
+            if torch.rand(1).to(args.device) > self.threshold:
+                self.step_sampling_method = 'gibbs'
+            else:
+                self.step_sampling_method = 'mh'
+
+        elif self.mix_method == 'adaptive':
+            if torch.all(self.get_total_likelihood()<-self.threshold):
+                self.step_sampling_method = 'gibbs'
+            else:
+                self.step_sampling_method = 'mh'
+
+        if self.step_sampling_method == 'gibbs':
+            step_sampler = UniformGibbs(self.sentences, self.temp, self.fix_length, self.model, self.mask_id)
+        elif self.step_sampling_method == 'mh':
+            step_sampler = MultiSiteMH(self.sentences, self.temp, self.fix_length, self.model, self.mask_id, self.num_masks, self.mc_sample_size)
+
+        step_sampler.step(iter_num)
+        self.sentences = step_sampler.sentences
+        self.edit_rate = step_sampler.edit_rate
+
+    def mask_prob(self, position):
+        """
+            Predict probability of words at mask position
+            """
+        masked_sentences = self.sentences.clone()
+        masked_sentences[:, position] = self.mask_id
+        outputs = self.model(masked_sentences)
+        return F.log_softmax(outputs[0][:, position] / self.temp, dim = -1)
+    
+    def get_total_likelihood(self):
+        sent_probs = torch.zeros(self.sentences.shape).to(args.device)
         
-    def get_joint_probability_real(self,sampling_sites,sentences):
-        if len(sampling_sites) == 1:
-            probs = self.mask_prob(sampling_sites.item(),sentences)
-            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
-            return conditional
-        else:
-            random_id = 0
-            site = sampling_sites[random_id]
-            #Calculate the conditional probability
-            probs = self.mask_prob(site,sentences)
-            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
-            inv_prob_array = torch.zeros(probs.shape).to(args.device)
-            assert probs.shape[0]==sentences.shape[0]
-            for batch_id in range(sentences.shape[0]):
-                sampled_sentences = sentences[batch_id].clone().to(args.device).expand((probs.shape[1],-1)).clone()
-                sampled_sentences[:,site] = torch.arange(probs.shape[1]).to(args.device)
-                #We have finite RAM so we need to batchify again 
-                assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
-                new_batch_size = 5000
-                new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
-                for j in range(new_batch_num):
-                    inv_prob_array[batch_id,new_batch_size*j:new_batch_size*(j+1)] = \
-                    torch.div(torch.ones(sampled_sentences[new_batch_size*j:new_batch_size*(j+1)].shape[0]).to(args.device),\
-                              self.get_joint_probability_real(sampling_sites[sampling_sites!=site],\
-                                                              sampled_sentences[new_batch_size*j:new_batch_size*(j+1)]))
-            return torch.log(torch.div(conditional,inv_prob_array.mean(dim=1)))
-        
-    def get_joint_probability_real_new(self,sampling_sites,sentences):
-        if len(sampling_sites) == 1:
-            probs = self.mask_prob(sampling_sites.item(),sentences)
-            conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,sampling_sites.item()])]).to(args.device)
-            return conditional
-        else:
-            #Random list for which site to factor out
-            random_list = torch.randperm(len(sampling_sites)).to(args.device)
-            joint_probs = torch.zeros(sentences.shape[0],len(sampling_sites)).to(args.device)
-            for iter_id,random_id in enumerate(random_list):
-                site = sampling_sites[random_id]
-                #Calculate the conditional probability
-                probs = self.mask_prob(site,sentences)
-                conditional = torch.tensor([prob[word].item() for prob,word in zip(probs,sentences[:,site])]).to(args.device)
-                inv_prob_array = torch.zeros(probs.shape).to(args.device)
-                assert probs.shape[0]==sentences.shape[0]
-                for batch_id in range(sentences.shape[0]):
-                    sampled_sentences = sentences[batch_id].clone().to(args.device).expand((probs.shape[1],-1)).clone()
-                    sampled_sentences[:,site] = torch.arange(probs.shape[1]).to(args.device)
-                    #We have finite RAM so we need to batchify again 
-                    assert inv_prob_array.shape[1]==sampled_sentences.shape[0]
-                    new_batch_size = 5000
-                    new_batch_num = math.ceil(sampled_sentences.shape[0]/new_batch_size)
-                    for j in range(new_batch_num):
-                        inv_prob_array[batch_id,new_batch_size*j:new_batch_size*(j+1)] = \
-                        torch.div(torch.ones(sampled_sentences[new_batch_size*j:new_batch_size*(j+1)].shape[0]).to(args.device),\
-                                  self.get_joint_probability_real(sampling_sites[sampling_sites!=site],\
-                                                                  sampled_sentences[new_batch_size*j:new_batch_size*(j+1)]))
-                joint_probs[:,iter_id] = torch.div(conditional,inv_prob_array.mean(dim=1))
-            print(joint_probs)
-            return torch.log(joint_probs.mean(dim=1))
+        # Why cut off first and last?
+        for j in range(1, self.sentences.shape[1] - 1) :
+            probs = self.mask_prob(j)
+            for i in range(self.sentences.shape[0]) :
+                # Look up probability of the actual word at this position
+                sent_probs[i, j] = probs[i, self.sentences[i, j]]
+
+        # Sum log probs for each sentence in batch
+        return torch.sum(sent_probs, axis=1)
+
 
 def run_chains(args) :
     # Load sentences
@@ -281,7 +316,10 @@ def run_chains(args) :
 +f'bert_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
     elif args.sampling_method == 'mh':
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-+f'bert_{args.sampling_method}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
++f'bert_{args.sampling_method}_{args.mc_sample_size}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
+    elif args.sampling_method == 'mix':
+        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
++f'bert_{args.sampling_method}_{args.mix_method}_{args.threshold}_{args.mc_sample_size}_{args.num_masks}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
     for i, input_sentence in enumerate(input_sentences):
         print(f'Beginning batch {i}')
@@ -297,7 +335,9 @@ def run_chains(args) :
         if args.sampling_method == 'gibbs':
             sampler = UniformGibbs(init_input, args.temp, args.fix_length, model, mask_id)
         elif args.sampling_method == 'mh':
-            sampler = MultiSiteMH(init_input, args.temp, args.fix_length, model, mask_id, args.num_masks)
+            sampler = MultiSiteMH(init_input, args.temp, args.fix_length, model, mask_id, args.num_masks, args.mc_sample_size)
+        elif args.sampling_method == 'mix':
+            sampler = MixModel(init_input, args.temp, args.fix_length, model, mask_id, args.num_masks, args.mix_method, args.threshold, args.mc_sample_size)
         for iter_num in range(args.chain_len):
             #print(f'Beginning iteration {iter_num}')
             sampler.step(iter_num)
@@ -305,7 +345,8 @@ def run_chains(args) :
             # Write out sentences
             if iter_num % args.sent_sample == 0:
                 writer.write(iter_num, sampler.sentences,
-                             sampler.get_total_likelihood().cpu().detach().numpy(),sampler.edit_rate)
+                             sampler.get_total_likelihood().cpu().detach().numpy(),
+                             sampler.edit_rate,sampler.step_sampling_method)
         time2 = time.time()
         print(f'Time it took for {i}th batch: {time2-time1}')
 
@@ -325,12 +366,18 @@ if __name__ == '__main__':
     parser.add_argument('--sent_sample', type=int, default = 5, 
                         help='frequency of recording sentences')
     parser.add_argument('--sampling_method', type=str, default = 'gibbs', 
-                        choices=['gibbs','mh'],
+                        choices=['gibbs','mh','mix'],
                         help='kind of sampling to do; options include "gibbs","mh"')
     parser.add_argument('--fix_length', type=bool, default = False, 
                         help='if True, resample to avoid changing length')
-    parser.add_argument('--num_masks', type=int, default = 1,
+    parser.add_argument('--num_masks', type=int,
                         help='number of positions to sample at one time')
+    parser.add_argument('--mix_method', type=str,
+                        help='how to switch between Gibbs and MH samplings')
+    parser.add_argument('--threshold', type=float,
+                        help='threshold for mixing')
+    parser.add_argument('--mc_sample_size', type=int,
+                        help='the number of samples for Monte-Carlo approximation; only applicable to mh or mix')
     args = parser.parse_args()
 
     print('running with args', args)
