@@ -8,10 +8,7 @@
     <script src="jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
     <script src="jsPsych/plugins/jspsych-instructions.js"></script>
     <script src="jsPsych/plugins/jspsych-html-button-response.js"></script>
-    <!-- <script src="jsPsych/plugins/jspsych-image-button-response.js"></script> -->
     <script src="jsPsych/plugins/jspsych-html-slider-response.js"></script>
-    <!-- <script src="jsPsych/plugins/jspsych-image-keyboard-response.js"></script> -->
-    <!-- <script src="jsPsych/plugins/jspsych-survey-multi-choice.js"></script> -->
     <script src="jsPsych/plugins/jspsych-survey-text.js"></script>
     <script src="jsPsych/plugins/jspsych-survey-multi-choice.js"></script>
     <link href="jsPsych/css/jspsych.css" rel="stylesheet" type="text/css"></link>
@@ -40,13 +37,11 @@
       stimulus:
         "<font size='2'><p align=left style='width:50%;margin:auto'> \
 	This research is being conducted by Takateru Yamakoshi, an undergraduate student, \
-        Robert Hawkins, a postdoctoral \
-        researcher, Adele Goldberg, and Tom Griffiths, faculty members at Princeton \
+        Robert Hawkins, a postdoctoral researcher, and Tom Griffiths, a faculty member at Princeton \
         University. This study takes approximately 10 minutes to complete.</p> \
         <br> \
         <p style='width:50%;margin:auto' align='left'>If you agree to take part in the research, you will make a series \
-        of judgments about sentences. You will be \
-        presented with information displayed as text and \
+        of judgments about sentences. You will be presented with information displayed as text and \
         will be asked to move a slider to express your judgment. \
         All of the information we obtain during the research will be kept \
         confidential, and not associated with your name in any way. However, \
@@ -80,7 +75,7 @@
         return "Data will be lost if you leave the page, are you sure?";
       }
     };
-
+    
     function setupGame () {
       var socket = io.connect();
       var timeline = [];
@@ -95,8 +90,6 @@
         console.log(mongoData)
         // get workerId, etc. from URL (so that it can be sent to the server)
         var turkInfo = jsPsych.turk.turkInfo();
-
-        // Extract stick data from mongo
         var trials = mongoData.trials
 
         // if still in preview mode, tell them to accept first, otherwise show first slide
@@ -110,36 +103,34 @@
         var ready_screen = {
           type: "instructions",
           pages : ["<p align=left style='width:50%;margin:auto'>\
-                    We are interested in your intuitions about the English language!</p> <br>\
+                      We are interested in your intuitions about the English language!</p> <br>\
                     <p align=left style='width:50%;margin:auto'>\
-                    In English, there are often different ways to say the same thing,\
-                    but some ways may sound more natural than others. \
-                    In this study, we will show you pairs of sentences, and ask you which sounds more natural.</p>",
+                      Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird.\
+                      Then again, people sometimes write weird-sounding sentences, too!\ 
+                      In this study, we will show you some sentences, and ask you to guess which ones were written by people and which ones were written by computers.</p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                    You will see two sentences labeled with the letters <b>A</b> and <b>B</b>, and a slider at the bottom of the screen.\
-                    The slider ranges from 'A is far more natural' to 'B is far more natural'.  \
-                    Please read both sentences carefully, then indicate which sentence sounds more natural, and by how much.</p>",
+                      On each screen, you will see a sentence at the top of the screen and a slider at the bottom of the screen.\
+                      The slider ranges from 'Definitely a human' to 'Definitely a computer'.  \
+                      Please read the sentence carefully, then indicate whether it is more likely to have been written by a human or a computer, and by how much.</p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                    Sometimes, the two sentences can sound equally natural or equally unnatural, \
-                    in which case you would place the slider closer to the center, 'about the same'. \
-                    Let's begin with a couple examples to get used to how it works.",
-                   "<p>Here is a pair of sentences: <br></p>\
-                    <p>A : Sandy filled water into the cup.</p>\
-                    <p>B : Sandy filled the cup with water.</p>\
-                    <p>Think about which one sounds more natural!</p>",
+                      Sometimes, the two sentences can sound equally natural or equally unnatural, \
+                      in which case you would place the slider closer to the center, 'Could be either'. \
+                      Let's begin with a couple examples to get used to how it works.",
+                   "<p>Here is a sentence: <br></p>\
+                      <p><b>It is a local municipality located within the West Coast District Municipality.</p></b>\
+                      <p>Take a minute to think about this sentence and whether it was written by a human or a computer!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                    Many people think B (Sandy filled the cup with water) sounds more natural,\
-                    so they would position the slider quite far toward the B option, as shown below:</p>\
+                      It turns out that this one was actually written by humans (on Wikipedia!)
+                      If you guessed it was written by humans, you would position the slider quite far toward the 'Definitely a human' option, as shown below:</p>\
                     <p><img src='sliderGifFar.gif' width = 800></p>",
-                   "Here's another example. Which sentence sounds more natural, A or B? <br>\
-                    <p>A : Sandy picked the book up.</p>\
-                    <p>B : Sandy picked up the book.</p>",
+                   "Here's another example. Do you think this was written by a human or a computer? <br>\
+                    <p><b>60 ( # 22 ), op.<b></p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                    In this case, many people think they both sound about equally natural,\
-                    so they would position the slider closer to the middle, as shown:</p>\
+                      This is a pretty weird sentence and it turns out to be written by a computer, probably imitating the kind of writing found in a library catalogue.
+                      In this case, you would position the slider closer to the middle, as shown:</p>\
                     <p><img src='sliderGifNear.gif' width = 800></p>\
                     <p align=left style='width:50%;margin:auto'>\
-                    Please keep in mind, however, that different sentences\
+                    Please keep in mind, however, that many cases will not be so clear, and  different sentences\
                     may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
                     You will receive a completion bonus of $1.00 if you make careful judgements for all 50 sentences. \
@@ -163,13 +154,13 @@
             options: ["One", "Two", "Three","Ten"],
             required:true},
            {prompt: "<br>Which question will you be answering on each screen?",
-            options: ["'Which sentence is longer?'", "'Which sentence sounds funnier?'", "'Which sentence sounds more natural?'"],
+            options: ["'Which sentence is longer?'", "'How funny is this sentence?'", "'Was this written by a human or a computer?'"],
             required: true},
            {prompt: "<br>What happens if you do <b>not</b> read each pair of sentences carefully?",
             options: ["I will click through everything quickly and get my completion bonus!",
                       "The experiment will be terminated and I will not receive a completion bonus."],
             required: true},
-           {prompt: "<br>What should I do if both sentences sound the same to me?",
+           {prompt: "<br>What should I do if I'm not sure?",
             options: ["Move the slider closer to the middle",
                       "Randomly pick one of the ends of the slider"],
             required: true},
@@ -178,8 +169,8 @@
 
         timeline.push(quizTrial)
         var true_answers = {
-          "Q0":"Two",
-          "Q1":"'Which sentence sounds more natural?'",
+          "Q0":"One",
+          "Q1":"'Was this written by a human or a computer?'",
           "Q2":"The experiment will be terminated and I will not receive a completion bonus.",
           "Q3":"Move the slider closer to the middle"
         }
@@ -193,7 +184,7 @@
           conditional_function: function(){
             // get the data from the previous trial,
             // and check which key was pressed
-            var resp = JSON.parse(JSON.stringify(jsPsych.data.get().last(1).values()[0]['responses']));
+            var resp = JSON.parse(JSON.stringify(jsPsych.data.get().last(1).values()[0]['response']));
             if ((resp["Q0"] == true_answers['Q0']) &&
                 (resp["Q1"] == true_answers['Q1']) &&
                 (resp["Q2"] == true_answers['Q2']) &&
@@ -240,30 +231,24 @@
         timeline.push(if_failed_node);
 
         _.forEach(trials, function(trial) {
-          var order = _.sample([true, false]);
-          var sentenceA = order ? trial.DOsentence : trial.PDsentence;
-          var sentenceB = order ? trial.PDsentence : trial.DOsentence;
           var sentence_stimulus = "\
             <div style='margin-left:25%;text-align: left'>\
-              <p>Which sentence sounds more natural, A or B?<br></p>\
-              <p>A : " + sentenceA + ".</p>\
-              <p>B : " + sentenceB + ".</p>\
+              <p>Was this sentence written by a human or a computer?<br></p>\
+              <p>" + trial.sentence + ".</p>\
             </div>";
           timeline.push({
             type: "html-slider-response",
             stimulus: sentence_stimulus,
             prompt: "",
-            labels: ['A is much more natural', 'about the same', 'B is much more natural'],
+            labels: ['Definitely a human', 'Could be either', 'Definitely a computer'],
             slider_width: sliderWidthScale * screen.width,
             require_movement: true,
 	    data: _.extend({}, trial, {
-	     'sentenceA' : order ? 'DO' : 'PD',
-	     'sentenceB' : order ? 'PD' : 'DO',
-	     'highValueMeans' : order ? 'PD' : 'DO',
-	     'stimulus_type': 'main_judgement'
+	      'stimulus_type': 'main_judgement'
 	    })
           });
         })
+
         var catch_stimulus1 = "\
           <div style='margin-left:25%;text-align: left'>\
             <p>Which sentence sounds more natural, A or B?<br></p>\
