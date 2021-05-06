@@ -12,8 +12,6 @@
     <script src="jsPsych/plugins/jspsych-survey-text.js"></script>
     <script src="jsPsych/plugins/jspsych-survey-multi-choice.js"></script>
     <link href="jsPsych/css/jspsych.css" rel="stylesheet" type="text/css"></link>
-
-    <script src="example_trials.js"></script>
   </head>
   <body></body>
   <script>
@@ -154,7 +152,7 @@
             options: ["One", "Two", "Three","Ten"],
             required:true},
            {prompt: "<br>Which question will you be answering on each screen?",
-            options: ["'Which sentence is longer?'", "'How funny is this sentence?'", "'Was this written by a human or a computer?'"],
+            options: ["'How long is this sentence?'", "'How funny is this sentence?'", "'How natural does this sentence sound?'"],
             required: true},
            {prompt: "<br>What happens if you do <b>not</b> read each pair of sentences carefully?",
             options: ["I will click through everything quickly and get my completion bonus!",
@@ -170,7 +168,7 @@
         timeline.push(quizTrial)
         var true_answers = {
           "Q0":"One",
-          "Q1":"'Was this written by a human or a computer?'",
+          "Q1":"'How natural does this sentence sound?'",
           "Q2":"The experiment will be terminated and I will not receive a completion bonus.",
           "Q3":"Move the slider closer to the middle"
         }
@@ -233,14 +231,14 @@
         _.forEach(trials, function(trial) {
           var sentence_stimulus = "\
             <div style='margin-left:25%;text-align: left'>\
-              <p>Was this sentence written by a human or a computer?<br></p>\
+              <p>How natural does this sentence sound?<br></p>\
               <p>" + trial.sentence + ".</p>\
             </div>";
           timeline.push({
             type: "html-slider-response",
             stimulus: sentence_stimulus,
             prompt: "",
-            labels: ['Definitely a human', 'Could be either', 'Definitely a computer'],
+            labels: ['Not natural at all', 'Completely natural'],
             slider_width: sliderWidthScale * screen.width,
             require_movement: true,
 	    data: _.extend({}, trial, {
@@ -362,8 +360,8 @@
             //const urlParams = new URLSearchParams(queryString);
 
             var packet = _.extend({}, trialData, {
-              dbname: 'neural_constructions',
-              colname: 'experiment1',
+              dbname: 'telephone-game',
+              colname: 'pilot',
               wID: turkInfo.workerId,
               aID: turkInfo.assignmentId,
               hitID: turkInfo.hitId,
