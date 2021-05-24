@@ -85,10 +85,9 @@
 
       // Start building timeline when we hear from server
       socket.on('onConnected', function(mongoData) {
-        console.log(mongoData)
         // get workerId, etc. from URL (so that it can be sent to the server)
         var turkInfo = jsPsych.turk.turkInfo();
-        var trials = mongoData.trials
+	var trials = _.values(mongoData)
         
         // if still in preview mode, tell them to accept first, otherwise show first slide
         if (!turkInfo.previewMode) {
@@ -101,35 +100,28 @@
         var ready_screen = {
           type: "instructions",
           pages : ["<p align=left style='width:50%;margin:auto'>\
-                      We are interested in your intuitions about the English language!</p> <br>",
-                   "<p align=left style='width:50%;margin:auto'>\
-                      Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird.\
-                      Then again, people sometimes write weird-sounding sentences, too!\
-                      In this study, we will show you some sentences and ask you to guess which ones were written by people and which ones were written by computers.</p>",
+                     We are interested in your intuitions about the English language! Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird. Then again, people sometimes write weird-sounding sentences, too! In this study, we will show you some sentences written by computers and humans and ask you to rate how natural they sound.</p>",
                    "<p align=left style='width:50%;margin:auto'>\
                       On each screen, you will see a sentence at the top of the screen and a slider at the bottom of the screen.\
-                      The slider ranges from 'Definitely a human' to 'Definitely a computer'.  \
-                      Please read the sentence carefully, then indicate whether it is more likely to have been written by a human or a computer, and by how much.</p>",
+                      The slider ranges from 'Not natural at all' to 'Completely natural'.  \
+                      Please read the sentence carefully, then indicate where it falls on this naturalness scale.</p>\
+                      <img src='slider_middle_agreement.png' width='400px'> </img>",
                    "<p align=left style='width:50%;margin:auto'>\
-                      Sometimes, the two sentences can sound equally natural or equally unnatural, \
-                      in which case you would place the slider closer to the center, 'Could be either'. \
+                      Sometimes, the sentence can sound somewhere in between, \
+                      in which case you would place the slider closer to the center. \
                       Let's begin with a couple examples to get used to how it works.",
                    "<p>Here is a sentence: <br></p>\
                       <p><b>It is a local municipality located within the West Coast District Municipality.</p></b>\
-                      <p>Take a minute to think about this sentence and whether it was written by a human or a computer!</p>",
+                      <p>Take a minute to think about this sentence and how natural it sounds!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
                       It turns out that this one was actually written by humans (on Wikipedia!)\
-                      If you guessed it was written by humans, you would position the slider quite far toward the 'Definitely a human' option, as shown below:</p>\
-                    <p><img src='sliderGifFar.gif' width = 800></p>",
-                   "Here's another example. Do you think this was written by a human or a computer? <br>\
-                    <p><b>60 ( # 22 ), op.<b></p>",
+                      If you guessed it was a natural sentence written by humans, you would position the slider quite far toward the 'Completely natural' option, as shown below:</p>",
+                   "OK, here's another example. Do you think this is a natural-sounding sentence written by a human? <br>\
+                    <p><b>A colorless green ideas sleep furiously.<b></p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                      This is a pretty weird sentence and it turns out to be written by a computer, probably imitating the kind of writing found in a library catalogue.\
-                      In this case, you would position the slider closer to the middle, as shown:</p>\
-                    <p><img src='sliderGifNear.gif' width = 800></p>\
-                    <p align=left style='width:50%;margin:auto'>\
-                    Please keep in mind, however, that many cases will not be so clear, and  different sentences\
-                    may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
+                      This is a pretty weird sentence and it turns out to be written by a computer, probably imitating the kind of writing found in linguistics textbooks.\
+                      In this case, you would position the slider closer to the left! Please keep in mind, however, that many cases will not be clear, and different sentences\
+                      may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
                     You will receive a completion bonus of $1.00 if you make careful judgements for all 50 sentences. \
                     We will closely monitor your responses and may terminate the study early with no completion bonus \
@@ -152,7 +144,7 @@
             options: ["One", "Two", "Three","Ten"],
             required:true},
            {prompt: "<br>Which question will you be answering on each screen?",
-            options: ["'How long is this sentence?'", "'How funny is this sentence?'", "'How natural does this sentence sound?'"],
+            options: ["How long is this sentence?", "How funny is this sentence?", "How natural does this sentence sound?"],
             required: true},
            {prompt: "<br>What happens if you do <b>not</b> read each pair of sentences carefully?",
             options: ["I will click through everything quickly and get my completion bonus!",
@@ -168,7 +160,7 @@
         timeline.push(quizTrial)
         var true_answers = {
           "Q0":"One",
-          "Q1":"'How natural does this sentence sound?'",
+          "Q1":"How natural does this sentence sound?",
           "Q2":"The experiment will be terminated and I will not receive a completion bonus.",
           "Q3":"Move the slider closer to the middle"
         }
@@ -182,6 +174,7 @@
           conditional_function: function(){
             // get the data from the previous trial,
             // and check which key was pressed
+	    console.log(JSON.stringify(jsPsych.data.get().last(1).values()[0]['response']))
             var resp = JSON.parse(JSON.stringify(jsPsych.data.get().last(1).values()[0]['response']));
             if ((resp["Q0"] == true_answers['Q0']) &&
                 (resp["Q1"] == true_answers['Q1']) &&
@@ -208,7 +201,7 @@
             if(jsPsych.data.get().last(1).values()[0]['trial_type'] == 'html-button-response') {
               return false;
             } else {
-              var resp = JSON.parse(JSON.stringify(jsPsych.data.get().last(1).values()[0]['responses']));
+	      var resp = JSON.parse(JSON.stringify(jsPsych.data.get().last(1).values()[0]['response']));
               if ((resp["Q0"] == true_answers['Q0']) &&
                   (resp["Q1"] == true_answers['Q1']) &&
                   (resp["Q2"] == true_answers['Q2']) &&
@@ -227,19 +220,19 @@
 
         timeline.push(if_passed_node);
         timeline.push(if_failed_node);
-
+	
         _.forEach(trials, function(trial) {
           var sentence_stimulus = "\
-            <div style='margin-left:25%;text-align: left'>\
+            <div style='margin-left:25%;width:50%;text-align:left'>\
               <p>How natural does this sentence sound?<br></p>\
-              <p>" + trial.sentence + ".</p>\
+              <p><b>" + trial.sentence + "</b></p>\
             </div>";
           timeline.push({
             type: "html-slider-response",
             stimulus: sentence_stimulus,
             prompt: "",
             labels: ['Not natural at all', 'Completely natural'],
-            slider_width: sliderWidthScale * screen.width,
+            slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
             require_movement: true,
 	    data: _.extend({}, trial, {
 	      'stimulus_type': 'main_judgement'
@@ -266,7 +259,7 @@
           stimulus: catch_stimulus1,
           prompt: "",
           labels: ['A is much more natural', 'about the same', 'B is much more natural'],
-          slider_width: sliderWidthScale * screen.width,
+          slider_width: sliderWidthScale * window.innerWidth,
           require_movement: true,
           data: {'stimulus_type': 'catch1', 'highValueMeans' : 'error' }
         };
@@ -275,7 +268,7 @@
           stimulus: catch_stimulus2,
           prompt: "",
           labels: ['A is much more natural', 'about the same', 'B is much more natural'],
-          slider_width: sliderWidthScale * screen.width,
+          slider_width: sliderWidthScale * window.innerWidth,
           require_movement: true,
           data: {'stimulus_type': 'catch2', 'highValueMeans' : 'correct' }
         };
@@ -292,16 +285,15 @@
             // get the data from the previous trial,
             // and check which key was pressed
             var resp = jsPsych.data.get().last(1).values()[0];
-            console.log(resp)
-            // if((resp['highValueMeans'] == 'correct' & parseFloat(resp['response']) < 50) ||
-            //    (resp['highValueMeans'] == 'error' & parseFloat(resp['response']) > 50)) {
-            //   return true;
-            // } else {
+            if(_.has(resp, 'highValueMeans') &&
+	       ((resp['highValueMeans'] == 'correct' & parseFloat(resp['response']) < 50) ||
+                (resp['highValueMeans'] == 'error' & parseFloat(resp['response']) > 50))) {
+               return true;
+             } else {
               return false;
-          //}
+              }
           },
           on_finish: function() {
-//            jsPsych.endExperiment()
             jsPsych.turk.submitToTurk({'bonus': '0'});
           }
         }
@@ -310,13 +302,12 @@
         var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12)) - 25;
         // Put another catch trial in trials 38-50
         var catch_trial_index2 = timeline.length - Math.floor(Math.random()*(12));
-        console.log(catch_trial_index1, 'index1')
+        //console.log(catch_trial_index1, 'index1')
         timeline.splice(catch_trial_index1, 0, catch_trial1)
         timeline.splice(catch_trial_index1+1, 0, catch_failed_node)
-        console.log(catch_trial_index2, 'index2')
-	      timeline.splice(catch_trial_index2, 0, catch_trial2)
-	      timeline.splice(catch_trial_index2+1, 0, catch_failed_node)
-
+        // console.log(catch_trial_index2, 'index2')
+	timeline.splice(catch_trial_index2, 0, catch_trial2)
+	timeline.splice(catch_trial_index2+1, 0, catch_failed_node)
         console.log(timeline)
 
         var exit_survey = {
