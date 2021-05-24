@@ -27,12 +27,12 @@ if(argv.gameport) {
 let server;
 let io;
 try {
-  const privateKey  = fs.readFileSync('/etc/apache2/ssl/stanford-cogsci.org.key'),
-        certificate = fs.readFileSync('/etc/apache2/ssl/stanford-cogsci.org.crt'),
-        intermed    = fs.readFileSync('/etc/apache2/ssl/intermediate.crt'),
-        options     = {key: privateKey, cert: certificate, ca: intermed};
-  server            = require('https').createServer(options,app).listen(gameport),
-  io                = require('socket.io')(server);
+  var pathToCerts = '/etc/letsencrypt/live/cogtoolslab.org/';
+  var privateKey = fs.readFileSync(pathToCerts + 'privkey.pem'),
+      certificate = fs.readFileSync(pathToCerts + 'cert.pem'),
+      options = { key: privateKey, cert: certificate };
+  server = require('https').createServer(options,app).listen(gameport),
+  io = require('socket.io')(server);
 } catch (err) {
   console.log("cannot find SSL certificates; falling back to http");
   server = app.listen(gameport),
@@ -115,7 +115,7 @@ const handleInvalidID = function(req, res) {
 function checkPreviousParticipant (workerId, callback) {
   const p = {'wID': workerId};
   const postData = {
-    dbname: 'neural_constructions',
+    dbname: 'telephone-game',
     query: p,
     projection: {'_id': 1}
   };
@@ -144,13 +144,15 @@ function initializeWithTrials(socket) {
   const gameid = UUID();
   sendPostRequest('http://localhost:6004/db/getstims', {
     json: {
-      dbname: 'neural_constructions',
+      dbname: 'telephone-game',
       colname: 'stimuli',
+      limit: 50,
       gameid: gameid
     }
   }, (error, res, body) => {
     if (!error && res.statusCode === 200) {
       // send trial list (and id) to client
+      console.log('received')
       console.log(body);
       var packet = _.extend({}, _.omit(body, ["_id", "numGames", "games"]), {
       	gameid: gameid
@@ -158,11 +160,10 @@ function initializeWithTrials(socket) {
       console.log('got condition packet from db: ', packet);
       socket.emit('onConnected', packet);
     } else {
-      console.log(`error getting stims: ${error} ${body}`);
-      console.log('returning hard-coded sticks');
+      console.log(`error getting stims: ${error} ${body}\n returning hard-coded example`);
       socket.emit('onConnected', {
 	gameid: gameid,
-	trials: _.clone(require('./example_trials.json'))
+	trials: _.clone(require('./wiki-stims/example_trials.json'))
       });
     }
   });
