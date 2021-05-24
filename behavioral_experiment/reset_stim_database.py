@@ -7,13 +7,12 @@ with open('auth.json') as f :
     auth = json.load(f)
 user = auth['user']
 pswd = auth['password']
-host = auth['host']
 
 # initialize mongo connection
 conn = pm.MongoClient('mongodb://{}:{}@127.0.0.1'.format(user, pswd))
 
 # get database for this project
-db = conn['neural_constructions']
+db = conn['telephone-game']
 
 # get stimuli collection from this database
 print('possible collections include: ', db.collection_names())
@@ -25,20 +24,22 @@ if stim_coll.count() != 0 :
     stim_coll.drop()
 
 # Loop through evidence and insert into collection
-trial_sets = pd.read_csv('../textfile/generated_pairs.csv')
+sets = {
+    'short' : pd.read_csv('./Samples/wiki/12TokenSents.csv'),
+    'medium' : pd.read_csv('./Samples/wiki/21TokenSents.csv'),
+    'long' : pd.read_csv('./Samples/wiki/37TokenSents.csv')
+}
 
-for group_name, group in trial_sets.groupby('trial_set') :
-    trials = []
-    for row_i, row in group.iterrows() :
-        trials.append(row.to_dict())
-    print(group_name)
-    packet = {
-        'trials' : trials,
-        'set_id' : group_name,
-        'numGames': 0,
-        'games' : []
-    }
-    stim_coll.insert_one(packet)
+for dataset in ['short', 'medium', 'long'] :
+    set = sets[dataset]
+    for i, row in set.iterrows() :
+        packet = {
+            'length' : dataset, 'sample_id' : row['sample_id'],
+            'folder_id' : row['folder_id'], 'sent_id' : row['sent_id'],
+            'sentence' : row['sentence'], 'prob' : row['prob_1'],
+            'numGames': 0, 'games' : []
+        }
+        stim_coll.insert_one(packet)
 
 print('checking one of the docs in the collection...')
 print(stim_coll.find_one())
