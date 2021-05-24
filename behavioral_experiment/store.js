@@ -84,7 +84,7 @@ function serve() {
       const query = request.body.query;
       const projection = request.body.projection;
 
-      var collectionList = ['experiment'];
+      var collectionList = ['experiment1', 'experiment2', 'production', 'production-optimized'];
 
       function checkCollectionForHits(collectionName, query, projection, callback) {
         const collection = database.collection(collectionName);
@@ -174,17 +174,22 @@ function serve() {
       const collection = database.collection(collectionName);
 
       // sort by number of times previously served up and take the first
-      collection.findOne({}, {
-	sort: [['numGames', 1]],
-        limit : 1
-      }, (err, results) => {
+      const limit = _.has(request.body, 'limit') ? request.body.limit : 1;
+      console.log('limit', limit);
+      collection.aggregate([
+	{$sort: {'numGames': 1}},
+	{$limit: 1500},
+	{$sample: {'size': limit}},
+      ]).toArray((err, results) => {
         if(err) {
           console.log(err);
         } else {
-	  console.log(results);
-	  // Immediately mark as annotated so others won't get it too
-	  markAnnotation(collection, request.body.gameid, results['_id']);
-          response.send(results);
+	  console.log('got', results.length, 'records')
+	  response.send(results.map(item => {
+	    // Immediately mark as annotated so others won't get it too
+	    markAnnotation(collection, request.body.gameid, item['_id']);
+	    return item;
+	  }));
         }
       });
     });
