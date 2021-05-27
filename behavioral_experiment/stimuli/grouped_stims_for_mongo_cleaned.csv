@@ -1,4 +1,4 @@
-sentence,prob,sent_length,source,sentence_num,id,step,phase,prob_class,.folds
+sentence,prob,sent_length,source,sentence_num,id,step,phase,prob_class,group_id
 "Often called the ""sax version"", the second recording was issued as a single in April 1973 with exactly the same catalogue number as the first release, causing difficulties for collectors.",-48.09864044189453,long,wiki,1,0_0,0,wiki,high,7
 "Most of today's Van Tuyls and Van Tyles are descended from the two youngest boys, twins Abraham and Isaac, both of whom became farmers on Staten Island.",-63.51420593261719,long,wiki,2,0_0,0,wiki,high,1
 "Given the epistemological nature of Talisse's democratic theory, his work tends to engage questions about public discourse, argumentation, the media, and public ignorance.",-66.4192886352539,long,wiki,3,0_0,0,wiki,low,16
@@ -31,7 +31,6 @@ There are two main types of latte art: free pouring (pattern created during the 
 "A capping of cream-coloured weathered latite, still retaining the characteristic porphyritic texture, may be studied at the top of the northern and western quarry faces.",-72.805389404296875,long,wiki,30,0_0,0,wiki,low,14
 "Consisting of 15 songs, the album includes the lead single ""Hard 2 Face Reality"" which is a collaboration with pop singer Justin Bieber and hip hop artist Jay Electronica.",-48.774696350097656,long,wiki,31,0_0,0,wiki,high,20
 "Designed by DeCarlo & Doll, Inc. and built by Trataros Construction, Inc., the renovations added of space at a cost of over eight million dollars.",-72.65702056884766,long,wiki,32,0_0,0,wiki,low,6
-"The overall judgement also resulted highest for face cream made with donkey milk Today, donkey milk is still used in the manufacture of soaps and creams with donkey's milk.",-89.46842193603516,long,wiki,33,0_0,0,wiki,low,1
 "Emigration to the Americas (mainly Cuba and Venezuela) continued during the 19th and early 20th century, due to the lack of economic opportunity and the relative isolation of the Canary Islands.",-24.014129638671875,long,wiki,34,0_0,0,wiki,high,21
 "It was later occupied by a senior citizens apartment complex, then declared a heritage building in 1982 and redeveloped as an office building by its owner, the Burns Lake Native Development Corporation.",-58.1245231628418,long,wiki,35,0_0,0,wiki,high,19
 "Several nations modified their existing tactics in ways that supported ideas that were later called infiltration tactics, with the German developments having the most impact, both during the war and afterwards.",-51.183998107910156,long,wiki,36,0_0,0,wiki,high,24
@@ -519,7 +518,7 @@ Nathan and Giuliani formed an ongoing relationship.,-20.669052124023438,short,wi
 Nearly all of the buildings had sod roofs.,-11.060710906982422,short,wiki,20,0_0,0,wiki,high,11
 Edwards chaired the Veterans Affairs Committee in the House.,-11.948365211486816,short,wiki,21,0_0,0,wiki,high,21
 Kamui uses a Nova Grappler deck.,-35.76326370239258,short,wiki,22,0_0,0,wiki,low,6
-The broadcast was titled Spice Girls In Concert Wild!,-42.61017608642578,short,wiki,23,0_0,0,wiki,low,1
+The broadcast was titled Spice Girls In Concert: Wild!,-42.61017608642578,short,wiki,23,0_0,0,wiki,low,1
 They settled at a site known as Fountain Cave.,-17.731775283813477,short,wiki,24,0_0,0,wiki,high,28
 Jack and Eric team up to disrupt the party.,-19.976823806762695,short,wiki,25,0_0,0,wiki,high,30
 It is currently the largest such complex in Russia.,-13.380422592163086,short,wiki,26,0_0,0,wiki,high,26
