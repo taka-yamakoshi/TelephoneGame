@@ -17,7 +17,7 @@
   <script>
     var preview = {
       type: 'instructions',
-      pages: ['<p> Welcome! In this HIT, you will make a series of quick decisions based on evidence. </p>' +
+      pages: ['<p> Welcome! In this HIT, you will make a series of quick decisions about language. </p>' +
               '<p> <b> If you are interested in learning more about this HIT, ' +
               'please first accept the HIT in MTurk before continuing further</b>. </p>'],
       show_clickable_nav: false,
@@ -87,7 +87,9 @@
       socket.on('onConnected', function(mongoData) {
         // get workerId, etc. from URL (so that it can be sent to the server)
         var turkInfo = jsPsych.turk.turkInfo();
-	var trials = _.values(mongoData)
+	console.log(mongoData)
+	console.log(mongoData.trials)
+	var trials = _.values(_.shuffle(mongoData.trials))
         
         // if still in preview mode, tell them to accept first, otherwise show first slide
         if (!turkInfo.previewMode) {
@@ -115,15 +117,15 @@
                       <p>Take a minute to think about this sentence and how natural it sounds!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
                       It turns out that this one was actually written by humans (on Wikipedia!)\
-                      If you guessed it was a natural sentence written by humans, you would position the slider quite far toward the 'Completely natural' option, as shown below:</p>",
-                   "OK, here's another example. Do you think this is a natural-sounding sentence written by a human? <br>\
+                      If it sounded normal to you, you would position the slider quite far toward the 'Completely natural' option, as shown below:</p>",
+                   "OK, here's another example. Do you think this is a normal sentence written by a human? <br>\
                     <p><b>A colorless green ideas sleep furiously.<b></p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                      This is a pretty weird sentence and it turns out to be written by a computer, probably imitating the kind of writing found in linguistics textbooks.\
+                      This is a pretty weird sentence! It turns out to be written by a computer, probably imitating the kind of writing found in linguistics textbooks.\
                       In this case, you would position the slider closer to the left! Please keep in mind, however, that many cases will not be clear, and different sentences\
                       may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
                    "<p align=left style='width:50%;margin:auto'>\
-                    You will receive a completion bonus of $1.00 if you make careful judgements for all 50 sentences. \
+                    You will receive a completion bonus of $1.00 if you make careful judgements for all 25 sentences. \
                     We will closely monitor your responses and may terminate the study early with no completion bonus \
                     if we detect anomalies in your behavior suggesting that you are not reading carefully.</p>",
                    "<p align=left style='width:50%;margin:auto'>\
@@ -213,8 +215,9 @@
             }
           },
           on_finish: function() {
-//            jsPsych.endExperiment()
-            jsPsych.turk.submitToTurk({'bonus': '0'});
+	    //            jsPsych.endExperiment()
+	    //jsPsych.turk.submitToTurk({'bonus': '0'});
+	    window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
           }
         }
 
@@ -231,7 +234,7 @@
             type: "html-slider-response",
             stimulus: sentence_stimulus,
             prompt: "",
-            labels: ['Not natural at all', 'Completely natural'],
+            labels: ['Very weird', 'Very natural'],
             slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
             require_movement: true,
 	    data: _.extend({}, trial, {
@@ -294,26 +297,25 @@
               }
           },
           on_finish: function() {
-            jsPsych.turk.submitToTurk({'bonus': '0'});
+            //jsPsych.turk.submitToTurk({'bonus': '0'});
+	    window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
           }
         }
 
-        // Put one catch trial in trials 12-25
-        var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12)) - 25;
-        // Put another catch trial in trials 38-50
-        var catch_trial_index2 = timeline.length - Math.floor(Math.random()*(12));
-        //console.log(catch_trial_index1, 'index1')
-        timeline.splice(catch_trial_index1, 0, catch_trial1)
+        // Put one catch trial in trials 1-12
+        var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12));
+	timeline.splice(catch_trial_index1, 0, catch_trial1)
         timeline.splice(catch_trial_index1+1, 0, catch_failed_node)
-        // console.log(catch_trial_index2, 'index2')
+	
+        // Put another catch trial in trials 13-25
+        var catch_trial_index2 = timeline.length - Math.floor(Math.random()*(12));
 	timeline.splice(catch_trial_index2, 0, catch_trial2)
 	timeline.splice(catch_trial_index2+1, 0, catch_failed_node)
-        console.log(timeline)
 
         var exit_survey = {
           type: 'survey-text',
           questions: [
-            {prompt: "Do you have any comments or suggestions for us?"}
+            {prompt: "Do you have any comments or suggestions for us? What exactly seemed weird about the weird sentences?"}
           ],
           data: {
             stimulus_type: 'exit_survey'
@@ -326,8 +328,8 @@
           type: 'html-keyboard-response',
           stimulus: 'Thank you for participating! Press any key to to be ' +
             'redirected to the completion page. You will be paid the base rate of ' +
-	    '$1.00 immediately after your HIT is approved, and will receive an additional ' +
-	    'completion bonus of $1.00 within 48 hours.'
+	    '$0.50 immediately after your HIT is approved, and will receive an additional ' +
+	    'completion bonus of $1 within 48 hours.'
         };
 
         timeline.push(goodbye);
@@ -343,8 +345,8 @@
           on_finish : function(data) {
             // At the end of the experiment, submit to turk
             // Record number of quiz attempts
-            jsPsych.turk.submitToTurk({'bonus': '1.00'});
-            //window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
+            //jsPsych.turk.submitToTurk({'bonus': '1.00'});
+            window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
           },
           on_trial_finish: function(trialData) {
             // At the end of each trial, send data to server
