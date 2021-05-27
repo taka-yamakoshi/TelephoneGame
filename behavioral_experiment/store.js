@@ -176,21 +176,18 @@ function serve() {
       // sort by number of times previously served up and take the first
       const limit = _.has(request.body, 'limit') ? request.body.limit : 1;
       console.log('limit', limit);
-      collection.aggregate([
-	{$sort: {'numGames': 1}},
-	{$limit: 1500},
-	{$sample: {'size': limit}},
-      ]).toArray((err, results) => {
+      collection.findOne({}, {
+	sort: [['numGames', 1]],
+	limit: 1
+//	{$sample: {'size': limit}},
+      }, (err, results) => {
         if(err) {
           console.log(err);
         } else {
 	  console.log('got', results.length, 'records')
-	  response.send(results.map(item => {
-	    // Immediately mark as annotated so others won't get it too
-	    markAnnotation(collection, request.body.gameid, item['_id']);
-	    return item;
-	  }));
-        }
+	  markAnnotation(collection, request.body.gameid, results['_id']);
+	  response.send(results);
+	}
       });
     });
 

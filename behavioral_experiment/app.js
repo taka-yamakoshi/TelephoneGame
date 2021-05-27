@@ -146,7 +146,6 @@ function initializeWithTrials(socket) {
     json: {
       dbname: 'telephone-game',
       colname: 'stimuli',
-      limit: 50,
       gameid: gameid
     }
   }, (error, res, body) => {
@@ -163,7 +162,7 @@ function initializeWithTrials(socket) {
       console.log(`error getting stims: ${error} ${body}\n returning hard-coded example`);
       socket.emit('onConnected', {
 	gameid: gameid,
-	trials: _.clone(require('./wiki-stims/example_trials.json'))
+	trials: _.clone(require('./stimuli/example_trials.json'))
       });
     }
   });
