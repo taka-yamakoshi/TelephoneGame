@@ -23,23 +23,20 @@ stim_coll = db['stimuli']
 if stim_coll.count() != 0 :
     stim_coll.drop()
 
-# Loop through evidence and insert into collection
-sets = {
-    'short' : pd.read_csv('./Samples/wiki/12TokenSents.csv'),
-    'medium' : pd.read_csv('./Samples/wiki/21TokenSents.csv'),
-    'long' : pd.read_csv('./Samples/wiki/37TokenSents.csv')
-}
+dataset = pd.read_csv('./stimuli/grouped_stims_for_mongo_cleaned.csv')
 
-for dataset in ['short', 'medium', 'long'] :
-    set = sets[dataset]
-    for i, row in set.iterrows() :
-        packet = {
-            'length' : dataset, 'sample_id' : row['sample_id'],
-            'folder_id' : row['folder_id'], 'sent_id' : row['sent_id'],
-            'sentence' : row['sentence'], 'prob' : row['prob_1'],
-            'numGames': 0, 'games' : []
-        }
-        stim_coll.insert_one(packet)
+for group_name, group in dataset.groupby('group_id') :
+    trials = []
+    for row_i, row in group.iterrows() :
+        trials.append(row.to_dict())
+
+    packet = {
+        'trials' : trials,
+        'set_id' : group_name,
+        'numGames': 0,
+        'games' : []
+    }
+    stim_coll.insert_one(packet)
 
 print('checking one of the docs in the collection...')
 print(stim_coll.find_one())
