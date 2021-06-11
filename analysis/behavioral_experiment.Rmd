@@ -1,0 +1,236 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(tidyboot)
+library(ggthemes)
+library(lme4)
+library(lmerTest)
+library(gganimate)
+library(gifski)
+```
+
+# Import & clean data
+
+we exclude the expeirmenter's ID to make sure there's no data from sandboxing
+
+```{r}
+d.raw <- read_csv('../data/dataFromMongo.csv') %>%
+  filter(!is.na(wID)) %>%
+  filter(wID != '60061239e01afe9652f17412')
+```
+
+we exclude people who failed the catch trials
+
+```{r}
+failed_catch_trials <- d.raw %>%
+  filter(stimulus_type %in% c('catch1')) %>%
+  mutate(fail = ifelse(stimulus_type == 'catch1', response > 50, response < 50)) %>%
+  filter(fail) %>%
+  pull(wID) %>%
+  unique()
+
+d <- d.raw %>%
+  filter(stimulus_type == 'main_judgement') %>%
+  group_by(wID, sent_length) %>%
+  filter(!(wID %in% failed_catch_trials)) %>%
+  mutate(response = as.numeric(response),
+         normed_response = scale(response))
+
+write_csv(d, '../data/cleaned_data.csv')
+```
+
+```{r}
+trials_per_participant <- d %>%
+  group_by(wID) %>%
+  tally()  
+
+cat('we have data from', length(trials_per_participant$wID), 'uniqe participants\n')
+cat('for', d$sentence %>% unique() %>% length(), 'uniqe sentences\n')
+cat('and an average of', d %>% group_by(sentence) %>% tally() %>% ungroup() %>% summarize(m = mean(n)) %>% pull(m), 'responses per sentence')
+
+```
+
+```{r}
+d %>%
+  group_by(sent_length, source) %>%
+  filter(step > 1000 | source != 'bert') %>%
+  tidyboot_mean(as.numeric(response), nboot = 1000, na.rm = F)  %>%
+  ungroup() %>%
+  mutate(source = fct_relevel(source, 'wiki', 'bert', 'lstm', 'ngram'),
+         sent_length = fct_relevel(sent_length, 'short', 'medium', 'long')) %>%
+  ggplot(aes(x = source, y = empirical_stat, fill = source)) +
+    geom_bar(stat = 'identity', position = 'dodge') +
+    geom_hline(yintercept = 50, linetype = 'dotted') +
+    geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+                  position = 'dodge', 
+                  color = 'grey40', width = 0) +
+    scale_fill_colorblind() +
+    ylim(0, 100) +
+    facet_grid(~ sent_length, scales = 'free_x', space = "free_x") +
+    labs(y = "mean naturalness", x = '') +
+    guides(fill = F) +
+    cowplot::theme_cowplot() +
+    theme(aspect.ratio = 8, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+ggsave('./behavioral_means.pdf', width = 4, height = 3.5, units = 'in')
+```
+
+```{r}
+d %>%
+  filter(source %in% c('bert', 'wiki')) %>%
+  filter(step != 999) %>%
+  mutate(step = ifelse(step > 1000, 0, step)) %>%
+  group_by(prob_class, sent_length, step, phase, source) %>%
+  tidyboot_mean(response, nboot = 100, na.rm = F) %>%
+  group_by( phase, source) %>%
+  pivot_wider(names_from = c('source', 'phase'), 
+              values_from = c('n', 'mean', 'empirical_stat', 'ci_lower', 'ci_upper')) %>%
+  group_by(prob_class, sent_length) %>%
+  mutate(empirical_stat_wiki = mean(empirical_stat_wiki_wiki, na.rm = TRUE),
+         ci_lower_wiki = mean(ci_lower_wiki_wiki, na.rm = TRUE),
+         ci_upper_wiki = mean(ci_upper_wiki_wiki, na.rm = TRUE),
+         ci_lower_bert_late = mean(ci_lower_bert_late, na.rm = TRUE),
+         ci_upper_bert_late = mean(ci_upper_bert_late, na.rm = TRUE),
+         empirical_stat_bert_late = mean(empirical_stat_bert_late, na.rm = TRUE)) %>%
+  ggplot(aes(x = log1p(step), y = empirical_stat_bert_early)) +
+    geom_point() +
+    facet_grid(prob_class ~ sent_length) +
+    geom_hline(aes(yintercept = empirical_stat_wiki), fill = 'green') +
+    geom_errorbar(aes(ymin = ci_lower_bert_early, ymax = ci_upper_bert_early), width = 0) +
+    geom_ribbon(aes(ymin = ci_lower_wiki, ymax = ci_upper_wiki), fill = 'green', alpha = 0.1) +
+    geom_ribbon(aes(ymin = ci_lower_bert_late, ymax = ci_upper_bert_late), alpha = 0.1) +
+    geom_hline(aes(yintercept = empirical_stat_bert_late)) +
+    geom_smooth(method = 'lm', formula = y ~ poly(x,2), se = F, span = 2) +
+    theme_few()
+```
+
+
+```{r}
+d %>%
+  filter(source %in% c('bert', 'wiki')) %>%
+  unite(source, source, phase) %>%
+  mutate(step = ifelse(step > 998, 1000, step),
+         step = ifelse(source == 'wiki_wiki', -1, step),
+         step = ifelse(source == 'bert_late', 10000, step)) %>%
+  ggplot(aes(x = factor(step), y = response, color = source)) +
+    geom_jitter(alpha = 0.05, width = 0.2) +
+    geom_boxplot(alpha = 0.8) +
+    #geom_smooth(se = F, method = 'lm', span = 2) +
+    facet_grid(sent_length ~ .) +
+    theme_few() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+```{r}
+d %>%
+  filter(source %in% c('bert', 'wiki')) %>%
+  group_by(source, prob, sent_length, sentence_num, id) %>%
+  summarize(m = mean(response)) %>%
+  ggplot(aes(x = prob, y = m, color = source)) +
+    geom_jitter(alpha = 0.5, width = 0.2) +
+    geom_smooth(se = F, method = 'lm', formula = y ~ poly(x,1), span = 1) +
+    facet_grid(source ~ sent_length ) +
+    theme_few() +
+    xlim(-75, 0) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+```{r}
+library(lme4)
+library(lmerTest)
+lmer(response ~ prob * source + (1  | wID),
+     data = d) %>%
+  summary()
+```
+
+```{r}
+d %>%
+  filter(source == 'bert') %>%
+  filter(step < 1000) %>%
+  lmer(response ~ log1p(step) * sent_length + (1  | wID),
+       contrasts = list(sent_length = contr.sum(3)),
+       data = .) %>%
+  summary()
+```
+
+```{r}
+d %>%
+  group_by(step, phase, sent_length, source, prob, prob_class, sentence, sentence_num, id) %>%
+  summarize(avg_response = mean(response)) %>%
+  arrange(-avg_response) %>%
+  rename(initial_state_prob_class = prob_class) %>%
+  unite(sentence_id, sentence_num, id) %>%
+  write_csv('../data/averaged_responses.csv')
+```
+
+# Visualize chains
+
+```{r}
+tsne <- read_csv('./tsne_out.csv') %>%
+  filter(edit_rate > 0) %>%
+  mutate(step = substep + (max(substep) + 1) * iter_num) %>%
+  select(sentence, step, x_tsne, y_tsne) %>%
+  mutate(prev_x = lag(x_tsne) ,
+         prev_y = lag(y_tsne))
+
+tsne %>%
+  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
+    geom_point(size = .5) +
+    geom_segment(aes(xend = prev_x, yend = prev_y), 
+                 arrow.fill = NULL) +
+                 # arrow = arrow(length = unit(0.30,"cm"), 
+                 #               angle = 15, 
+                 #               type = "closed")) +
+    # uncomment this line to see text labels
+    #geom_text(aes(label=sentence), size = 1)+
+    theme_few(20) +
+    scale_shape_manual(values = c(21)) +
+    scale_alpha_continuous(range = c(0.5, 1))+
+    scale_color_gradientn(colours = viridis(5))+
+    theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank()) +
+    labs(x = "", y = "") +
+    guides(color = F, shape = F, alpha = F) +
+    theme(aspect.ratio = 1)  #+
+
+ggsave(filename = 'tsne.pdf',
+       width = 20, height = 20)
+
+```
+
+## make a tsne animation
+
+```{r}
+out <- tsne %>%
+  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
+    geom_point() +
+    geom_segment(aes(xend = prev_x, yend = prev_y), arrow.fill = NULL) +
+    theme_few(12) +
+    scale_shape_manual(values = c(21)) +
+    scale_alpha_continuous(range = c(0.5, 1))+
+    scale_color_gradientn(colours = viridis(5))+
+    guides(color = F, shape = F, alpha = F) +
+    theme(aspect.ratio = 1)  +
+    labs(title = '{tsne %>% filter(step == closest_state) %>% pull(sentence)}', x = "", y = "") +
+    theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank()) +
+    #transition_time(step) +
+    transition_states(step, transition_length = 0, state_length = .1) +
+    shadow_mark() 
+
+#animate(out, nframes = 1000, renderer = gifski_renderer('tsne-animation.gif'))
+a <- animate(out, nframes = 1000, renderer = av_renderer('tsne.mp4'))
+anim_save(filename = "tsne-animation.mp4")
+
+```
+
+
+
+
