@@ -1,0 +1,79 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Imports
+
+Dependencies
+
+```{r}
+library(tidyverse)
+library(here)
+library(ggthemes)
+```
+
+Import a chain of generated sentences.
+
+```{r}
+d.chains <- read_csv(here('data/21TokenSents/bert_new_gibbs_input_1.csv')) %>%
+  mutate(algorithm = 'base') %>%
+  bind_rows(read_csv(here('data/21TokenSents/bert_new_gibbs_mixture_0.001_input_1.csv')) %>% 
+              mutate(algorithm = 'mixture')) 
+
+d.lags <- d.chains %>%
+  group_by(sentence_num, chain_num, algorithm) %>%
+  mutate(`prevProb_1` = lag(prob),
+         `prevProb_2` = lag(prob, 2),
+         `prevProb_5` = lag(prob, 5),
+         `prevProb_10` = lag(prob, 10),
+         `prevProb_20` = lag(prob, 20),
+         `prevProb_50` = lag(prob, 50),
+         `prevProb_100` = lag(prob, 100),
+         `prevProb_200` = lag(prob, 200),
+         `prevProb_500` = lag(prob, 500),
+         `prevProb_1000` = lag(prob, 1000)) %>%
+  pivot_longer(starts_with('prevProb'), 
+               values_to = 'prevProb', 
+               names_to = 'lag') %>%
+  filter(!is.na(prevProb)) %>%
+  separate(lag, into = c('garbage', 'lag')) %>%
+  mutate(lag = as.integer(lag)) %>%
+  select(-garbage) %>%
+  arrange(sentence_num, chain_num)
+```
+
+```{r}
+d.cors <- d.lags %>%
+  group_by(sentence_num, chain_num, algorithm, lag) %>%
+  summarize(correlation = cor(prob, prevProb)) %>%
+  group_by(algorithm, lag) %>%
+  tidyboot_mean(correlation) 
+
+ggplot(d.cors, aes(x = lag*5, y = empirical_stat, fill =algorithm, color = algorithm)) +
+    geom_point(data = d.cors %>% filter(lag %in% c(1)), size = 2.5) +
+    geom_text(aes(label = algorithm), nudge_y = 0.05, data = d.cors %>% filter(lag %in% c(200))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper),  alpha = 0.1, color = NA) +
+    geom_hline(yintercept = 0.025, linetype = 'dotted') +
+    labs(y = 'auto-correlation', x = 'lag (epochs)') +
+    theme_few() +
+    theme(aspect.ratio = 1, legend.position = 'none')
+
+ggsave('autocorrelation.pdf', width = 3, height = 3, units = 'in')
+```
+
+```{r}
+d.chains %>%
+  filter(iter_num %% 100 == 0) %>%
+  ggplot(aes(x = iter_num, y = edit_rate, color = algorithm, group = interaction(sentence_num, chain_num))) +
+    geom_jitter(alpha = 0.05, size = 0.5, height = .05) +
+    geom_smooth(method = 'loess', se=F, span = .5) +
+    facet_wrap(~ algorithm) +
+    theme_few() +
+    theme(legend.position = 'none') +
+    labs(y = 'edit rate', x = 'step')
+
+ggsave('edit_rates.pdf', width = 6, height = 3, units = 'in')
+```
+

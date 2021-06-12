@@ -1,3 +1,5 @@
+# dependencies: imageio, fpdf2, wand, ffmpeg
+
 import pandas as pd
 import imageio
 from fpdf import FPDF
@@ -6,14 +8,17 @@ from wand.image import Image
     
 data = pd.read_csv('12TokenSents.csv')
 
-# write to file a pdf for each 'source' sentence
+# we want to create a movie for each 'source' sentence
 for group_name, group in data.groupby('sentence_num') :
+
+    # make a directory for this sentence
+    Path("sent{}".format(group_name)).mkdir(parents=True, exist_ok=True)
     num_substeps = int(len(group['substep']) / 10)
     filenames = []
-    Path("sent{}".format(group_name)).mkdir(parents=True, exist_ok=True)
 
-    print('generating pdf')
+    # initialize a pdf
     pdf = FPDF(format=(200,150))
+    pdf_filename = "sent{}/steps.pdf".format(group_name)
     pdf.add_font('DejaVu', '', 'DejaVuSansMono.ttf', uni=True)
     pdf.set_font('DejaVu', '', 14)
 
@@ -24,7 +29,7 @@ for group_name, group in data.groupby('sentence_num') :
 
         # write the step at the top...
         pdf.cell(200, 10, txt='epoch:{}, step:{}'.format(
-            str(sub_d['iter_num'][0]), str(sub_d['substep'][0])
+            str(sub_d['iter_num'].iloc[1]), str(sub_d['substep'].iloc[1])
         ))
         pdf.ln(10)
 
@@ -32,18 +37,16 @@ for group_name, group in data.groupby('sentence_num') :
         for sentence in sub_d['sentence'] :
             pdf.cell(200, 10, txt=sentence)
             pdf.ln(10)
-    f = "sent{}.pdf".format(group_name, substep)
-    pdf.output(f)
+    pdf.output(pdf_filename)
 
-    print('converting to pngs...')
+    print('converting pages of pdf to pngs...')
     images = []
-    all_pages = Image(filename=f) 
+    all_pages = Image(filename=pdf_filename) 
     for i, page in enumerate(all_pages.sequence):
-        print(i)
         with Image(page) as img:
             img.format = 'png'
-            img.save(filename=f+'.png')
-            images.append(imageio.imread(f+'.png'))
+            img.save(filename=pdf_filename+'.png')
+            images.append(imageio.imread(pdf_filename+'.png'))
 
-    print('creating gif...')
-    imageio.mimwrite('movie-{}.mp4'.format(group_name), images, fps=2)    
+    print('creating movie from pngs...')
+    imageio.mimwrite('sent{}/movie.mp4'.format(group_name), images, fps=4)

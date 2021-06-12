@@ -106,12 +106,30 @@ d %>%
     geom_hline(aes(yintercept = empirical_stat_bert_late)) +
     geom_smooth(method = 'lm', formula = y ~ poly(x,2), se = F, span = 2) +
     theme_few()
+
+ggsave('./burn-in.pdf')
 ```
 
+```{r}
+d %>%
+  filter(source %in% c('bert')) %>%
+  filter(step < 999) %>%
+  group_by(step, sentence, sent_length, prob_class, sentence_num, id) %>%
+  summarize(response = mean(response)) %>%
+  ggplot(aes(x = log1p(step), y = response)) +
+    geom_jitter(alpha = 0.1, height = 0, width = 0.2) +
+    geom_smooth(method = 'lm', formula = y ~ poly(x, 2), color = 'black') +
+    facet_grid(prob_class ~ sent_length) +
+    theme_few() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave('./item-level-variation.pdf')
+```
 
 ```{r}
 d %>%
   filter(source %in% c('bert', 'wiki')) %>%
+  filter(step != 999) %>%
   unite(source, source, phase) %>%
   mutate(step = ifelse(step > 998, 1000, step),
          step = ifelse(source == 'wiki_wiki', -1, step),
@@ -120,7 +138,7 @@ d %>%
     geom_jitter(alpha = 0.05, width = 0.2) +
     geom_boxplot(alpha = 0.8) +
     #geom_smooth(se = F, method = 'lm', span = 2) +
-    facet_grid(sent_length ~ .) +
+    facet_grid(sent_length ~ prob_class) +
     theme_few() +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
