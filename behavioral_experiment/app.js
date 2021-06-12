@@ -52,6 +52,7 @@ app.get('/*', (req, res) => {
   } else if(!valid_id(id)) {
 
     // If invalid id, block them
+    console.log(id)
     console.log('invalid id, blocked');
     return handleInvalidID(req, res);
 
@@ -104,7 +105,7 @@ const handleDuplicate = function(req, res) {
 };
 
 const valid_id = function(id) {
-  return (id.length <= 15 && id.length >= 12) || id.length == 41;
+  return true;// (id.length <= 15 && id.length >= 12) || id.length == 41;
 };
 
 const handleInvalidID = function(req, res) {
@@ -145,7 +146,7 @@ function initializeWithTrials(socket) {
   sendPostRequest('http://localhost:6004/db/getstims', {
     json: {
       dbname: 'telephone-game',
-      colname: 'stimuli',
+      colname: 'stimuli-batch2',
       gameid: gameid
     }
   }, (error, res, body) => {
