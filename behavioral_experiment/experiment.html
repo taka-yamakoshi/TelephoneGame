@@ -5,7 +5,6 @@
     <script src="/socket.io/socket.io.js" type="text/javascript"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lodash@4.17.10/lodash.min.js"></script>
     <script src="jsPsych/jspsych.js"></script>
-    <script src="jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
     <script src="jsPsych/plugins/jspsych-instructions.js"></script>
     <script src="jsPsych/plugins/jspsych-html-button-response.js"></script>
     <script src="jsPsych/plugins/jspsych-html-slider-response.js"></script>
@@ -23,27 +22,22 @@
       show_clickable_nav: false,
       allow_keys: false
     }
-
-    var welcome = {
-      type: 'html-keyboard-response',
-      stimulus:
-        'Thank you for accepting the HIT. Press any key to begin.'
-    }
-
+    
     var consent = {
       type: 'html-button-response',
       stimulus:
         "<font size='2'><p align=left style='width:50%;margin:auto'> \
+        Thank you for accepting this task! \
 	This research is being conducted by Takateru Yamakoshi, an undergraduate student, \
         Robert Hawkins, a postdoctoral researcher, and Tom Griffiths, a faculty member at Princeton \
-        University. This study takes approximately 10 minutes to complete.</p> \
+        University. This study takes approximately 5 minutes to complete.</p> \
         <br> \
         <p style='width:50%;margin:auto' align='left'>If you agree to take part in the research, you will make a series \
         of judgments about sentences. You will be presented with information displayed as text and \
         will be asked to move a slider to express your judgment. \
         All of the information we obtain during the research will be kept \
         confidential, and not associated with your name in any way. However, \
-	while the study is running it will be associated with your MTurk \
+	while the study is running it will be associated with your \
         worker id. Once the study is complete we will replace your worker id \
         with a random string.</p> \
         <br> \
@@ -56,7 +50,7 @@
         <p style='width:50%;margin:auto' align='left'>By consenting to participate, you acknowledge that you are 18 years \
         or older, have read this consent form, agree to its contents, and agree \
         to take part in this research. If you do not wish to consent, close \
-        this page and return the HIT on Mechanical Turk.</p></font>",
+        this page and return the task.</p></font>",
       choices: ['I consent to participate.']
     }
 
@@ -79,7 +73,7 @@
       var timeline = [];
 
       // Values fixed for human experiments.
-      var iterationName = 'mturk_sample'
+      var iterationName = 'prolific-pilot0'
       var sliderWidthScale = 0.5
       var maxQuizAttempts = 3
 
@@ -93,7 +87,6 @@
         
         // if still in preview mode, tell them to accept first, otherwise show first slide
         if (!turkInfo.previewMode) {
-          timeline.push(welcome);
           timeline.push(consent);
         } else {
           timeline.push(preview);
@@ -101,34 +94,35 @@
 
         var ready_screen = {
           type: "instructions",
-          pages : ["<p align=left style='width:50%;margin:auto'>\
+          pages : ["<p align=left style='width:500px;margin:auto'>\
                      We are interested in your intuitions about the English language! Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird. Then again, people sometimes write weird-sounding sentences, too! In this study, we will show you some sentences written by computers and humans and ask you to rate how natural they sound.</p>",
-                   "<p align=left style='width:50%;margin:auto'>\
-                      On each screen, you will see a sentence at the top of the screen and a slider at the bottom of the screen.\
+                   "<p align=left style='width:500px;margin:auto'>\
+                      On each screen, you will see a single sentence at the top and a slider at the bottom.\
                       The slider ranges from 'Not natural at all' to 'Completely natural'.  \
                       Please read the sentence carefully, then indicate where it falls on this naturalness scale.</p>\
                       <img src='slider_middle_agreement.png' width='400px'> </img>",
-                   "<p align=left style='width:50%;margin:auto'>\
+                   "<p align=left style='width:500px;margin:auto'>\
                       Sometimes, the sentence can sound somewhere in between, \
                       in which case you would place the slider closer to the center. \
                       Let's begin with a couple examples to get used to how it works.",
                    "<p>Here is a sentence: <br></p>\
                       <p><b>It is a local municipality located within the West Coast District Municipality.</p></b>\
                       <p>Take a minute to think about this sentence and how natural it sounds!</p>",
-                   "<p align=left style='width:50%;margin:auto'>\
+                   "<p align=left style='width:500px;margin:auto'>\
                       It turns out that this one was actually written by humans (on Wikipedia!)\
-                      If it sounded normal to you, you would position the slider quite far toward the 'Completely natural' option, as shown below:</p>",
+                      If it sounded normal to you, you would position the slider quite far toward the 'Completely natural' option, as shown below:</p>\
+                      <img src='slider_high_agreement.png' width='400px'> </img>",
                    "OK, here's another example. Do you think this is a normal sentence written by a human? <br>\
                     <p><b>A colorless green ideas sleep furiously.<b></p>",
-                   "<p align=left style='width:50%;margin:auto'>\
+                   "<p align=left style='width:500px;margin:auto'>\
                       This is a pretty weird sentence! It turns out to be written by a computer, probably imitating the kind of writing found in linguistics textbooks.\
                       In this case, you would position the slider closer to the left! Please keep in mind, however, that many cases will not be clear, and different sentences\
                       may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
-                   "<p align=left style='width:50%;margin:auto'>\
+                   "<p align=left style='width:500px;margin:auto'>\
                     You will receive a completion bonus of $1.00 if you make careful judgements for all 25 sentences. \
                     We will closely monitor your responses and may terminate the study early with no completion bonus \
                     if we detect anomalies in your behavior suggesting that you are not reading carefully.</p>",
-                   "<p align=left style='width:50%;margin:auto'>\
+                   "<p align=left style='width:500px;margin:auto'>\
                     Before we begin, you must complete a short quiz to \
                     show that you understand the task. You must pass the quiz within \
                     <b>1 attempt</b> to proceed to the experiment, so think carefully about your responses!</p>"
@@ -142,7 +136,7 @@
         var quizTrial = {
           type: 'survey-multi-choice',
           questions:
-          [{prompt: "How many sentences will you see on each screen?",
+          [{prompt: "How many sentences will you rate on each screen?",
             options: ["One", "Two", "Three","Ten"],
             required:true},
            {prompt: "<br>Which question will you be answering on each screen?",
@@ -217,7 +211,7 @@
           on_finish: function() {
 	    //            jsPsych.endExperiment()
 	    //jsPsych.turk.submitToTurk({'bonus': '0'});
-	    window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
+	    window.location.replace("https://app.prolific.co/submissions/complete?cc=K1K1S32")
           }
         }
 
@@ -226,8 +220,8 @@
 	
         _.forEach(trials, function(trial) {
           var sentence_stimulus = "\
-            <div style='margin-left:25%;width:50%;text-align:left'>\
-              <p>How natural does this sentence sound?<br></p>\
+            <div style='margin:auto;width:500px'>\
+              <p style='text-align:center'>How natural does this sentence sound?<br></p>\
               <p><b>" + trial.sentence + "</b></p>\
             </div>";
           timeline.push({
@@ -244,25 +238,23 @@
         })
 
         var catch_stimulus1 = "\
-          <div style='margin-left:25%;text-align: left'>\
-            <p>Which sentence sounds more natural, A or B?<br></p>\
-            <p>A : The man ate a slice of cake.</p>\
-            <p>B : The man cake of slice ate a.</p>\
+          <div style='margin:auto;width:500px'>\
+            <p style='text-align:center'>How natural does this sentence sound?<br></p>\
+            <p><b>The man cake of slice ate a.</b></p>\
           </div>";
 
 	var catch_stimulus2 = "\
-          <div style='margin-left:25%;text-align: left'>\
-            <p>Which sentence sounds more natural, A or B?<br></p>\
-            <p>A : The woman ball him the kicked.</p>\
-            <p>B : The woman kicked him the ball.</p>\
+          <div style='margin:auto;width:500px'>\
+            <p style='text-align:center'>How natural does this sentence sound?<br></p>\
+            <p><b>The woman a ball him kickered.</b></p>\
           </div>";
 
         var catch_trial1 = {
           type: "html-slider-response",
           stimulus: catch_stimulus1,
           prompt: "",
-          labels: ['A is much more natural', 'about the same', 'B is much more natural'],
-          slider_width: sliderWidthScale * window.innerWidth,
+          labels: ['Very weird', 'Very natural'],
+          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
           require_movement: true,
           data: {'stimulus_type': 'catch1', 'highValueMeans' : 'error' }
         };
@@ -270,10 +262,10 @@
           type: "html-slider-response",
           stimulus: catch_stimulus2,
           prompt: "",
-          labels: ['A is much more natural', 'about the same', 'B is much more natural'],
-          slider_width: sliderWidthScale * window.innerWidth,
+          labels: ['Very weird', 'Very natural'],
+          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
           require_movement: true,
-          data: {'stimulus_type': 'catch2', 'highValueMeans' : 'correct' }
+          data: {'stimulus_type': 'catch2', 'highValueMeans' : 'error' }
         };
         var catch_failed_node = {
           timeline: [{
@@ -289,8 +281,7 @@
             // and check which key was pressed
             var resp = jsPsych.data.get().last(1).values()[0];
             if(_.has(resp, 'highValueMeans') &&
-	       ((resp['highValueMeans'] == 'correct' & parseFloat(resp['response']) < 50) ||
-                (resp['highValueMeans'] == 'error' & parseFloat(resp['response']) > 50))) {
+	       ((resp['highValueMeans'] == 'error' & parseFloat(resp['response']) > 50))) {
                return true;
              } else {
               return false;
@@ -298,12 +289,12 @@
           },
           on_finish: function() {
             //jsPsych.turk.submitToTurk({'bonus': '0'});
-	    window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
+	    window.location.replace("https://app.prolific.co/submissions/complete?cc=K1K1S32")
           }
         }
 
         // Put one catch trial in trials 1-12
-        var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12));
+        var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12)) - 12;
 	timeline.splice(catch_trial_index1, 0, catch_trial1)
         timeline.splice(catch_trial_index1+1, 0, catch_failed_node)
 	
@@ -315,7 +306,8 @@
         var exit_survey = {
           type: 'survey-text',
           questions: [
-            {prompt: "Do you have any comments or suggestions for us? What exactly seemed weird about the weird sentences?"}
+            {prompt: "Did the experiment run smoothly? Do you have any comments or suggestions for us?", rows: 5, columns: 40},
+	    {prompt: "How did you determine whether a sentence sounded weird? What exactly seemed weird about them?", rows: 5, columns :40}
           ],
           data: {
             stimulus_type: 'exit_survey'
@@ -325,11 +317,12 @@
         timeline.push(exit_survey)
 
         var goodbye = {
-          type: 'html-keyboard-response',
+          type: 'html-button-response',
           stimulus: 'Thank you for participating! Press any key to to be ' +
-            'redirected to the completion page. You will be paid the base rate of ' +
-	    '$0.50 immediately after your HIT is approved, and will receive an additional ' +
-	    'completion bonus of $1 within 48 hours.'
+            'redirected to the completion page. You will be paid the base rate ' +
+	    'immediately after your HIT is approved, and will receive an additional ' +
+	    'completion bonus of $1 within 48 hours.',
+	  choices: ['End experiment']
         };
 
         timeline.push(goodbye);
@@ -346,7 +339,7 @@
             // At the end of the experiment, submit to turk
             // Record number of quiz attempts
             //jsPsych.turk.submitToTurk({'bonus': '1.00'});
-            window.location.replace("https://app.prolific.co/submissions/complete?cc=394CC1E4")
+            window.location.replace("https://app.prolific.co/submissions/complete?cc=44645224")
           },
           on_trial_finish: function(trialData) {
             // At the end of each trial, send data to server
@@ -355,7 +348,7 @@
 
             var packet = _.extend({}, trialData, {
               dbname: 'telephone-game',
-              colname: 'pilot',
+              colname: 'human-judgments',
               wID: turkInfo.workerId,
               aID: turkInfo.assignmentId,
               hitID: turkInfo.hitId,

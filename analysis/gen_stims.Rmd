@@ -1,0 +1,169 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r message = F}
+library(tidyverse)
+library(ggthemes)
+library(groupdata2)
+library(viridis)
+```
+
+# Batch 1 
+
+```{r}
+bert_dir <- '../behavioral_experiment/stimuli/bert/'
+wiki_dir <- '../behavioral_experiment/stimuli/wiki/'
+
+initial_sentences <- read_csv('../behavioral_experiment/stimuli/initial_sentences.csv') %>%
+  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
+  rename(initial_prob = prob)
+
+wiki_stims <- bind_rows(
+  read_csv(paste0(wiki_dir, '12TokenSents.csv')) %>% mutate(sent_length = 'short', source = 'wiki'),
+  read_csv(paste0(wiki_dir, '21TokenSents.csv')) %>% mutate(sent_length = 'medium', source = 'wiki'),
+  read_csv(paste0(wiki_dir, '37TokenSents.csv')) %>% mutate(sent_length = 'long', source = 'wiki')
+)
+
+bert_stims <- bind_rows(
+  read_csv(paste0(bert_dir, '12TokenSents.csv')) %>% mutate(sent_length = 'short', source = 'bert'),
+  read_csv(paste0(bert_dir, '21TokenSents.csv')) %>% mutate(sent_length = 'medium', source = 'bert'),
+  read_csv(paste0(bert_dir, '37TokenSents.csv')) %>% mutate(sent_length = 'long', source = 'bert')
+) 
+```
+
+```{r}
+# sample subset of bert_stims for hand cleaning
+samples <- bert_stims %>%
+  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
+  left_join(initial_sentences, by = c('initial_sentence')) %>%
+  group_by(sent_length) %>%
+  mutate(step = substep + (max(substep) + 1) * iter_num,
+         step_size = (max(substep) + 1) * 5,
+         num_periods = str_count(sentence, fixed("."))) %>%
+  filter(num_periods == 1) %>%
+  group_by(sent_length, chain_num, sentence_num) %>%
+  filter(step %in% c(0, 2^(0:9), max(step), max(step) - 100*step_size, max(step) - 200*step_size)) %>%
+  mutate(sentence = gsub('[CLS] ', '', sentence, fixed = T),
+         sentence = gsub(' [SEP]', '', sentence, fixed = T)) %>%
+  select(sentence_num, chain_num, iter_num, sentence, prob,  step, prob_class, source, sent_length) %>%
+  ungroup() %>%
+  distinct(across(-chain_num), .keep_all = TRUE)
+
+write_csv(samples, file = '../behavioral_experiment/stimuli/possible_bert_sentences_uncleaned.csv')
+```
+
+
+```{r}
+early_sentences <- read_csv('../behavioral_experiment/stimuli/possible_bert_sentences_cleaned.csv') %>%
+  filter(step < 1000) %>%
+  group_by(sentence_num, sent_length, step) %>%
+  sample_n(1) %>%
+  mutate(phase = 'early')
+
+late_sentences <- read_csv('../behavioral_experiment/stimuli/possible_bert_sentences_cleaned.csv') %>%
+  filter(step > 1000) %>%
+  group_by(sentence_num, sent_length, chain_num) %>%
+  sample_n(1) %>%
+  mutate(phase = 'late')
+
+wiki_sentences <- wiki_stims %>%
+  group_by(sent_length, source) %>%
+  sample_n(50) %>%
+  rename(prob = prob_1) %>%
+  select(sentence, prob, sent_length, source) %>%
+  left_join(initial_sentences %>%
+      group_by(prob_class,sent_length) %>%
+      summarize(prob = mean(initial_prob)) %>%
+      spread(prob_class, prob) %>%
+      mutate(halfway_point = (low + high)/2)) %>%
+  mutate(sentence_num = row_number(), chain_num = 0, iter_num = 0, step = 0, phase='wiki',
+         prob_class = ifelse(prob < halfway_point, 'low', 'high')) %>%
+  select(-high, -low, -halfway_point)
+```
+
+```{r}
+out <- bind_rows(
+  wiki_sentences, late_sentences, early_sentences
+  ) %>%
+  unite(id, chain_num, iter_num) %>%
+  ungroup() %>%
+  groupdata2::fold(k = 30, cat_col = c('sent_length', 'source', 'phase', 'prob_class', 'sentence_num'))
+
+write_csv(out, file = '../behavioral_experiment/stimuli/grouped_stims_for_mongo.csv')
+```
+
+# Batch 2
+
+
+```{r}
+ngram_stims <- read_delim('../ngram/ngram_out.txt', ',', col_names = c('sentence')) %>% mutate(sent_length = 'short', source = 'ngram')
+lstm_stims <- read_delim('../lstm/lstm_output.txt', '\n', col_names = c('sentence')) %>% mutate(sent_length = 'short', source = 'lstm')
+
+bert_dir <- '../behavioral_experiment/stimuli/bert/'
+bert_stims <- bind_rows(
+  read_csv(paste0(bert_dir, '12-token-sents-batch2.csv')) %>% mutate(sent_length = 'short', source = 'bert'),
+  read_csv(paste0(bert_dir, '21-token-sents-batch2.csv')) %>% mutate(sent_length = 'medium', source = 'bert'),
+  read_csv(paste0(bert_dir, '37-token-sents-batch2.csv')) %>% mutate(sent_length = 'long', source = 'bert')
+) 
+
+initial_sentences <- read_csv('../behavioral_experiment/stimuli/initial_sentences_batch2.csv') %>%
+  mutate(sentence = str_to_lower(sentence)) %>%
+  rename(initial_prob = prob_1, initial_sentence = sentence)
+
+samples <- bert_stims %>%
+  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
+  left_join(initial_sentences, by = c('initial_sentence')) %>%
+  group_by(sent_length) %>%
+  mutate(step = substep + (max(substep) + 1) * iter_num,
+         step_size = (max(substep) + 1) * 5,
+         num_periods = str_count(sentence, fixed("."))) %>%
+  filter(num_periods == 1) %>%
+  group_by(sent_length, chain_num, sentence_num) %>%
+  filter(step %in% c(0, 2^(0:9), 999, max(step), max(step) - 100*step_size, max(step) - 200*step_size)) %>%
+  mutate(sentence = gsub('[CLS] ', '', sentence, fixed = T),
+         sentence = gsub(' [SEP]', '', sentence, fixed = T)) %>%
+  select(sentence_num, chain_num, iter_num, sentence, prob,  step, prob_class, source, sent_length) %>%
+  ungroup() %>%
+  distinct(across(-chain_num), .keep_all = TRUE)
+
+write_csv(samples, file = '../behavioral_experiment/stimuli/possible_bert_sentences_uncleaned_batch2.csv')
+```
+
+```{r}
+early_sentences <- read_csv('../behavioral_experiment/stimuli/possible_bert_sentences_cleaned_batch2.csv') %>%
+  filter(step < 1000) %>%
+  group_by(sentence_num, sent_length, step) %>%
+  sample_n(1) %>%
+  mutate(phase = 'early')
+
+late_sentences <- read_csv('../behavioral_experiment/stimuli/possible_bert_sentences_cleaned_batch2.csv') %>%
+  filter(step > 1000) %>%
+  group_by(sentence_num, sent_length, chain_num) %>%
+  sample_n(1) %>%
+  mutate(phase = 'late')
+
+lstmngram_sentences <- ngram_stims %>%
+  rbind(lstm_stims) %>%
+  group_by(sent_length, source) %>%
+  sample_n(50) %>%
+  mutate(sentence_num = row_number(), 
+         chain_num = 0, 
+         iter_num = 0, 
+         step = 0, 
+         phase='none',
+         prob_class = 'none')
+```
+
+```{r}
+out <- bind_rows(
+  lstmngram_sentences, late_sentences, early_sentences
+  ) %>%
+  unite(id, chain_num, iter_num) %>%
+  ungroup() %>%
+  groupdata2::fold(k = 30, cat_col = c('sent_length', 'source', 'phase', 'prob_class', 'sentence_num')) %>%
+  filter(.folds == 1)
+
+write_csv(out, file = '../behavioral_experiment/stimuli/grouped_stims_for_mongo_batch2.csv')
+```

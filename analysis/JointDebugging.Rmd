@@ -1,0 +1,25 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(tidyboot)
+d <- read_csv('./sample_sentences_diff_10.csv') %>%
+     bind_rows(read_csv('./sample_sentences_same_10.csv'))
+
+d %>%
+  mutate(sampling_sites = str_squish(gsub("[[:punct:]]", "", sampling_sites))) %>%
+  separate(sampling_sites, into = c('first_site', 'second_site')) %>%
+  mutate(first_site = as.numeric(first_site), second_site = as.numeric(second_site)) %>%
+  mutate(distance_between_sites = abs(second_site - first_site)) %>%
+  group_by(distance_between_sites) %>%
+  tidyboot_mean(abs(diff)) %>%
+  ggplot(aes(x = distance_between_sites, y = empirical_stat)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0)
+```
+
+
+
