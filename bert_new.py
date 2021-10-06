@@ -54,11 +54,11 @@ class UniformGibbs():
         self.temp = temp
         self.model = model
         self.mask_id = mask_id
-        self.edit_rate = torch.zeros(self.sentences.shape[0]).to(args.device)
+        self.edit_rate = torch.zeros(self.sentences.shape[0],device=args.device)
 
     @torch.no_grad()
     def substep(self, iter_num, pos):
-        probs = self.mask_prob(pos)
+        probs = self.mask_prob(pos,self.sentences,temp=self.temp)
         sentences, edit_loc = self.sample_words(probs, pos, self.sentences)
         return sentences, edit_loc.float()
 
@@ -66,8 +66,8 @@ class UniformGibbs():
     def step(self, iter_num):
         seq_len = self.sentences.shape[1]
         # exclude first/last tokens (CLS/SEP) from positions
-        rand_list = (torch.randperm(seq_len-2)+1).to(args.device)
-        edit_locs = torch.zeros((self.sentences.shape[0],len(rand_list))).to(args.device)
+        rand_list = torch.randperm(seq_len-2,device=args.device)+1
+        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=args.device)
         for pos_id,pos in enumerate(rand_list):
             self.sentences, edit_locs[:, pos_id] = self.substep(iter_num, pos)
         self.edit_rate = torch.mean(edit_locs, axis=1)
@@ -79,11 +79,11 @@ class UniformGibbs():
         edit_loc = new_sentences[:, pos]!=sentences[:, pos]
         return new_sentences, edit_loc
 
-    def mask_prob(self, position, sentences):
+    def mask_prob(self, position, sentences, temp=1):
         masked_sentences = sentences.clone()
         masked_sentences[:, position] = self.mask_id
         logits = self.model(masked_sentences)[0]
-        return F.log_softmax(logits[:, position] / self.temp, dim = -1)
+        return F.log_softmax(logits[:, position] / temp, dim = -1)
 
     @torch.no_grad()
     def get_total_score(self, sentences):
@@ -104,32 +104,43 @@ class MultiSiteMH():
         self.model = model
         self.mask_id = mask_id
         self.num_masks = num_masks
-        self.edit_rate = torch.zeros(self.sentences.shape[0]).to(args.device)
+        self.edit_rate = torch.zeros(self.sentences.shape[0],device=args.device)
+
+    @torch.no_grad()
+    def substep(self, iter_num, pos):
+        probs = self.mask_prob(pos,self.sentences,temp=self.temp)
+        sentences, edit_loc = self.sample_words(probs, pos, self.sentences)
+        edit_rate = edit_loc.mean(axis=1)
+        return sentences, edit_rate
 
     @torch.no_grad()
     def step(self, iter_num):
         seq_len = self.sentences.shape[1]
         # exclude first/last tokens (CLS/SEP) from positions
-        mask_pos_list = (torch.randperm(seq_len-2)[:self.num_masks]+1).to(args.device)
-        probs = self.mask_prob(mask_pos_list,self.sentences)
-        self.sentences, edit_rate = self.sample_words(probs, mask_pos_list, self.sentences)
-        self.edit_rate = edit_rate.mean(axis=1)
+        rand_list = np.random.permutation(seq_len-2)+1
+        mask_pos_list = torch.tensor([[pos]+list(np.random.choice([i for i in rand_list if i!=pos],
+                                                                    size=self.num_masks-1,replace=False))
+                                                                    for pos in rand_list],device=args.device)
+        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=args.device)
+        for pos_id, pos in enumerate(mask_pos_list):
+            self.sentences, edit_locs[:, pos_id] = self.substep(iter_num, pos)
+        self.edit_rate = torch.mean(edit_locs, axis=1)
 
     def sample_words(self, probs, pos, sentences):
         old_score = self.get_total_score(sentences)
         old_words = sentences[:,pos]
         #Propose a set of words
-        new_words = torch.tensor([list(torch.multinomial(prob, num_samples=1).squeeze(dim=-1)) for prob in torch.exp(probs)]).to(args.device)
+        new_words = torch.tensor([list(torch.multinomial(prob, num_samples=1).squeeze(dim=-1)) for prob in torch.exp(probs)],device=args.device)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = new_words
         new_score = self.get_total_score(new_sentences)
         fwd_prob = torch.tensor([prob.index_select(dim=-1,index=word_list).diagonal().sum().item()\
-                                for word_list,prob in zip(new_words,probs)]).to(args.device)
+                                for word_list,prob in zip(new_words,probs)],device=args.device)
         bck_prob = torch.tensor([prob.index_select(dim=-1,index=word_list).diagonal().sum().item()\
-                                for word_list,prob in zip(old_words,probs)]).to(args.device)
+                                for word_list,prob in zip(old_words,probs)],device=args.device)
         alpha = torch.exp(new_score - old_score + bck_prob - fwd_prob)
         alpha[alpha>1] = 1
-        accept = torch.rand(sentences.shape[0]).to(args.device)<alpha
+        accept = torch.rand(sentences.shape[0],device=args.device)<alpha
         chosen_words = old_words.clone()
         chosen_words[accept,:] = new_words[accept,:]
         chosen_sentences = sentences.clone()
@@ -137,11 +148,11 @@ class MultiSiteMH():
         edit_rate = chosen_sentences[:,pos]!=sentences[:,pos]
         return chosen_sentences, edit_rate.float()
 
-    def mask_prob(self, position, sentences):
+    def mask_prob(self, position, sentences, temp=1):
         masked_sentences = sentences.clone()
         masked_sentences[:, position] = self.mask_id
         logits = self.model(masked_sentences)[0]
-        return F.log_softmax(logits[:, position] / self.temp, dim = -1)
+        return F.log_softmax(logits[:, position] / temp, dim = -1)
 
     @torch.no_grad()
     def get_total_score(self, sentences):
@@ -211,20 +222,27 @@ def run_chains(args) :
         for iter_num in range(args.chain_len):
             # write out substeps (gibbs) / all steps (mh) for iter_num<100
             if iter_num<100:
+                seq_len = sampler.sentences.shape[1]
                 if 'gibbs' in args.sampling_method:
-                    seq_len = sampler.sentences.shape[1]
                     # exclude first/last tokens (CLS/SEP) from positions
-                    rand_list = torch.randperm(seq_len-2).to(args.device)+1
+                    rand_list = torch.randperm(seq_len-2,device=args.device)+1
                     for pos_id,pos in enumerate(rand_list):
                         writer.write(iter_num, sampler.sentences,
                                      sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
                                      sampler.edit_rate,pos_id,0)
                         sampler.sentences, sampler.edit_rate = sampler.substep(iter_num, pos)
                 elif 'mh' in args.sampling_method:
-                    writer.write(iter_num, sampler.sentences,
-                                 sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
-                                 sampler.edit_rate,sampler.sentences.shape[1]-3,0)
-                    sampler.step(iter_num)
+                    # exclude first/last tokens (CLS/SEP) from positions
+                    rand_list = np.random.permutation(seq_len-2)+1
+                    mask_pos_list = torch.tensor([[pos]+list(np.random.choice([i for i in rand_list if i!=pos],
+                                                                                size=sampler.num_masks-1,replace=False))
+                                                                                for pos in rand_list],device=args.device)
+                    for pos_id,pos in enumerate(mask_pos_list):
+                        writer.write(iter_num, sampler.sentences,
+                                     sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
+                                     sampler.edit_rate,pos_id,0)
+                        sampler.sentences, sampler.edit_rate = sampler.substep(iter_num, pos)
+
             else:
                 if iter_num % args.sent_sample == 0:
                     writer.write(iter_num, sampler.sentences,
@@ -237,7 +255,7 @@ def run_chains(args) :
                     num_switches += 1
 
                     # Choose random wikipedia samples
-                    sampled_ids = torch.randperm(wiki_samples.shape[0])[:args.batch_size].to(args.device)
+                    sampled_ids = torch.randperm(wiki_samples.shape[0],device=args.device)[:args.batch_size]
                     new_init_input = wiki_samples[sampled_ids].to(args.device)
 
                     #sampler = UniformGibbs(init_input, args.temp, model, mask_id)
