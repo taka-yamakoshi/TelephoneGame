@@ -24,7 +24,7 @@ class Writer():
     def init_output_csv(self, header=None):
         header = ['sentence_num','chain_num','iter_num',
                   'initial_sentence', 'sentence', 'prob',
-                  'edit_rate', 'substep','switch']
+                  'edit_rate', 'step','switch','accept_rate']
         with open(self.save_file, "w") as writeFile:
             csv.writer(writeFile).writerow(header)
 
@@ -32,7 +32,7 @@ class Writer():
         self.init_sent = init_sent
         self.sentence_num = sentence_num
 
-    def write(self, iter_num, sentences, scores, edit_rate, substep, switch):
+    def write(self, iter_num, sentences, scores, edit_rate, step, switch, accept_rate):
         with open(self.save_file, "a") as writeFile:
             csvwriter = csv.writer(writeFile)
             decoded_sentences = [str(tokenizer.decode(sentence)) for sentence in sentences]
@@ -41,35 +41,52 @@ class Writer():
                 print(decoded_sentences)
                 print(scores)
                 print(edit_rate)
+                print(accept_rate)
             for row_id, sentence in enumerate(decoded_sentences) :
                 csvwriter.writerow([
                     self.sentence_num, row_id, iter_num,
                     self.init_sent, sentence, scores[row_id],
-                    edit_rate[row_id].item(), substep, switch
+                    edit_rate[row_id].item(), step, switch, accept_rate[row_id].item()
                 ])
 
 class UniformGibbs():
-    def __init__(self, sentences, temp, model, mask_id):
+    def __init__(self, sentences, temp, model, mask_id, device, sweep_order):
         self.sentences = sentences
         self.temp = temp
         self.model = model
         self.mask_id = mask_id
-        self.edit_rate = torch.zeros(self.sentences.shape[0],device=args.device)
+        self.device = device
+        self.edit_rate = torch.zeros(self.sentences.shape[0],device=self.device)
+        self.accept_rate = torch.ones(self.sentences.shape[0],device=self.device) # always accept gibbs samples
+        self.sweep_order = sweep_order
+
+    def get_rand_list(self,seq_len):
+        # exclude first/last tokens (CLS/SEP) from positions
+        if self.sweep_order=='ascend':
+            rand_list = torch.arange(seq_len-2,device=self.device)+1
+        elif self.sweep_order=='descend':
+            rand_list = torch.arange(seq_len-2,0,-1,device=self.device)
+        elif self.sweep_order=='random_sweep':
+            rand_list = torch.randperm(seq_len-2,device=self.device)+1
+        elif self.sweep_order=='random':
+            rand_list = torch.randint(seq_len-2,size=(seq_len-2,),device=self.device)+1
+        else:
+            print('Invalid sweep_order')
+        return rand_list
 
     @torch.no_grad()
-    def substep(self, iter_num, pos):
+    def step(self, iter_num, pos):
         probs = self.mask_prob(pos,self.sentences,temp=self.temp)
         sentences, edit_loc = self.sample_words(probs, pos, self.sentences)
         return sentences, edit_loc.float()
 
     @torch.no_grad()
-    def step(self, iter_num):
+    def sweep(self, iter_num):
         seq_len = self.sentences.shape[1]
-        # exclude first/last tokens (CLS/SEP) from positions
-        rand_list = torch.randperm(seq_len-2,device=args.device)+1
-        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=args.device)
+        rand_list = self.get_rand_list(seq_len)
+        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=self.device)
         for pos_id,pos in enumerate(rand_list):
-            self.sentences, edit_locs[:, pos_id] = self.substep(iter_num, pos)
+            self.sentences, edit_locs[:, pos_id] = self.step(iter_num, pos)
         self.edit_rate = torch.mean(edit_locs, axis=1)
 
     def sample_words(self, probs, pos, sentences):
@@ -98,55 +115,81 @@ class UniformGibbs():
         return torch.sum(sent_probs, axis=1)
 
 class MultiSiteMH():
-    def __init__(self, sentences, temp, model, mask_id, num_masks):
+    def __init__(self, sentences, temp, model, mask_id, num_masks, device, sweep_order, adjacent_block=False):
         self.sentences = sentences
         self.temp = temp
         self.model = model
         self.mask_id = mask_id
         self.num_masks = num_masks
-        self.edit_rate = torch.zeros(self.sentences.shape[0],device=args.device)
+        self.device = device
+        self.edit_rate = torch.zeros(self.sentences.shape[0],device=self.device)
+        self.accept_rate = torch.zeros(self.sentences.shape[0],device=self.device)
+        self.sweep_order = sweep_order
+        self.adjacent_block = adjacent_block
 
-    @torch.no_grad()
-    def substep(self, iter_num, pos):
-        probs = self.mask_prob(pos,self.sentences,temp=self.temp)
-        sentences, edit_loc = self.sample_words(probs, pos, self.sentences)
-        edit_rate = edit_loc.mean(axis=1)
-        return sentences, edit_rate
-
-    @torch.no_grad()
-    def step(self, iter_num):
-        seq_len = self.sentences.shape[1]
+    def get_rand_list(self,seq_len):
         # exclude first/last tokens (CLS/SEP) from positions
-        rand_list = np.random.permutation(seq_len-2)+1
-        mask_pos_list = torch.tensor([[pos]+list(np.random.choice([i for i in rand_list if i!=pos],
-                                                                    size=self.num_masks-1,replace=False))
-                                                                    for pos in rand_list],device=args.device)
-        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=args.device)
+        if self.sweep_order=='ascend':
+            rand_list = np.arange(seq_len-2)+1
+        elif self.sweep_order=='descend':
+            rand_list = np.arange(seq_len-2)[::-1]+1
+        elif self.sweep_order=='random_sweep':
+            rand_list = np.random.permutation(seq_len-2)+1
+        elif self.sweep_order=='random':
+            rand_list = np.random.randint(seq_len-2,size=seq_len-2)+1
+        else:
+            print('Invalid sweep_order')
+        return rand_list
+
+    def get_mask_pos_list(self,rand_list,seq_len):
+        if self.adjacent_block:
+            mask_pos_list = torch.tensor([[(pos-1+i)%(seq_len-2)+1 for i in range(self.num_masks)] for pos in rand_list],device=self.device)
+        else:
+            mask_pos_list = torch.tensor([[pos]+list(np.random.choice([i for i in rand_list if i!=pos],
+                                                                        size=self.num_masks-1,replace=False))
+                                                                        for pos in rand_list],device=self.device)
+        return mask_pos_list
+
+    @torch.no_grad()
+    def step(self, iter_num, pos):
+        probs = self.mask_prob(pos,self.sentences,temp=self.temp)
+        sentences, edit_loc, accept_rate = self.sample_words(probs, pos, self.sentences)
+        edit_rate = edit_loc.mean(axis=1)
+        return sentences, edit_rate, accept_rate
+
+    @torch.no_grad()
+    def sweep(self, iter_num):
+        seq_len = self.sentences.shape[1]
+        rand_list = self.get_rand_list(seq_len)
+        mask_pos_list = self.get_mask_pos_list(rand_list,seq_len)
+        edit_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=self.device)
+        accept_locs = torch.zeros(size=(self.sentences.shape[0],len(rand_list)),device=self.device)
         for pos_id, pos in enumerate(mask_pos_list):
-            self.sentences, edit_locs[:, pos_id] = self.substep(iter_num, pos)
+            self.sentences, edit_locs[:, pos_id], accept_locs[:, pos_id] = self.step(iter_num, pos)
         self.edit_rate = torch.mean(edit_locs, axis=1)
+        self.accept_rate = torch.mean(accept_locs, axis=1)
 
     def sample_words(self, probs, pos, sentences):
         old_score = self.get_total_score(sentences)
         old_words = sentences[:,pos]
         #Propose a set of words
-        new_words = torch.tensor([list(torch.multinomial(prob, num_samples=1).squeeze(dim=-1)) for prob in torch.exp(probs)],device=args.device)
+        new_words = torch.tensor([list(torch.multinomial(prob, num_samples=1).squeeze(dim=-1)) for prob in torch.exp(probs)],device=self.device)
         new_sentences = sentences.clone()
         new_sentences[:,pos] = new_words
         new_score = self.get_total_score(new_sentences)
         fwd_prob = torch.tensor([prob.index_select(dim=-1,index=word_list).diagonal().sum().item()\
-                                for word_list,prob in zip(new_words,probs)],device=args.device)
+                                for word_list,prob in zip(new_words,probs)],device=self.device)
         bck_prob = torch.tensor([prob.index_select(dim=-1,index=word_list).diagonal().sum().item()\
-                                for word_list,prob in zip(old_words,probs)],device=args.device)
+                                for word_list,prob in zip(old_words,probs)],device=self.device)
         alpha = torch.exp(new_score - old_score + bck_prob - fwd_prob)
         alpha[alpha>1] = 1
-        accept = torch.rand(sentences.shape[0],device=args.device)<alpha
+        accept = torch.rand(sentences.shape[0],device=self.device)<alpha
         chosen_words = old_words.clone()
         chosen_words[accept,:] = new_words[accept,:]
         chosen_sentences = sentences.clone()
         chosen_sentences[:,pos] = chosen_words
         edit_rate = chosen_sentences[:,pos]!=sentences[:,pos]
-        return chosen_sentences, edit_rate.float()
+        return chosen_sentences, edit_rate.float(), accept.float()
 
     def mask_prob(self, position, sentences, temp=1):
         masked_sentences = sentences.clone()
@@ -191,10 +234,13 @@ def run_chains(args) :
 
     if args.sampling_method=='gibbs_mixture':
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_new_{args.sampling_method}_{args.epsilon}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.epsilon}_{args.sentence_id}_{args.temp}.csv'
+    elif args.adjacent_block:
+        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
+        +f'bert_new_{args.sampling_method}_adjacent_{args.sweep_order}_{args.sentence_id}_{args.temp}.csv'
     else:
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_new_{args.sampling_method}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
 
     for i, input_sentence in enumerate(input_sentences):
@@ -213,43 +259,41 @@ def run_chains(args) :
 
         # set up the sampler
         if 'gibbs' in args.sampling_method:
-            sampler = UniformGibbs(init_input, args.temp, model, mask_id)
+            sampler = UniformGibbs(init_input, args.temp, model, mask_id, args.device, args.sweep_order)
         elif 'mh' in args.sampling_method:
-            sampler = MultiSiteMH(init_input, args.temp, model, mask_id, args.num_masks)
+            sampler = MultiSiteMH(init_input, args.temp, model, mask_id, args.num_masks, args.device, args.sweep_order, args.adjacent_block)
 
         switch = 0
         num_switches = 0
         for iter_num in range(args.chain_len):
-            # write out substeps (gibbs) / all steps (mh) for iter_num<100
+            # write out all steps for iter_num<100
             if iter_num<100:
                 seq_len = sampler.sentences.shape[1]
                 if 'gibbs' in args.sampling_method:
                     # exclude first/last tokens (CLS/SEP) from positions
-                    rand_list = torch.randperm(seq_len-2,device=args.device)+1
+                    rand_list = sampler.get_rand_list(seq_len)
                     for pos_id,pos in enumerate(rand_list):
                         writer.write(iter_num, sampler.sentences,
                                      sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
-                                     sampler.edit_rate,pos_id,0)
-                        sampler.sentences, sampler.edit_rate = sampler.substep(iter_num, pos)
+                                     sampler.edit_rate,pos_id,0,sampler.accept_rate)
+                        sampler.sentences, sampler.edit_rate = sampler.step(iter_num, pos)
                 elif 'mh' in args.sampling_method:
                     # exclude first/last tokens (CLS/SEP) from positions
-                    rand_list = np.random.permutation(seq_len-2)+1
-                    mask_pos_list = torch.tensor([[pos]+list(np.random.choice([i for i in rand_list if i!=pos],
-                                                                                size=sampler.num_masks-1,replace=False))
-                                                                                for pos in rand_list],device=args.device)
+                    rand_list = sampler.get_rand_list(seq_len)
+                    mask_pos_list = sampler.get_mask_pos_list(rand_list,seq_len)
                     for pos_id,pos in enumerate(mask_pos_list):
                         writer.write(iter_num, sampler.sentences,
                                      sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
-                                     sampler.edit_rate,pos_id,0)
-                        sampler.sentences, sampler.edit_rate = sampler.substep(iter_num, pos)
+                                     sampler.edit_rate,pos_id,0,sampler.accept_rate)
+                        sampler.sentences, sampler.edit_rate, sampler.accept_rate = sampler.step(iter_num, pos)
 
             else:
                 if iter_num % args.sent_sample == 0:
                     writer.write(iter_num, sampler.sentences,
                                  sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
-                                 sampler.edit_rate,sampler.sentences.shape[1]-3,switch)
+                                 sampler.edit_rate,sampler.sentences.shape[1]-3,switch,sampler.accept_rate)
                     switch = 0
-                sampler.step(iter_num)
+                sampler.sweep(iter_num)
                 if args.sampling_method=='gibbs_mixture' and iter_num>=1000 and torch.rand(1)<args.epsilon:
                     switch = 1
                     num_switches += 1
@@ -259,9 +303,9 @@ def run_chains(args) :
                     new_init_input = wiki_samples[sampled_ids].to(args.device)
 
                     #sampler = UniformGibbs(init_input, args.temp, model, mask_id)
-                    sampler = UniformGibbs(new_init_input, args.temp, model, mask_id)
+                    sampler = UniformGibbs(new_init_input, args.temp, model, mask_id, args.device, args.sweep_order)
                     for _ in range(100):
-                        sampler.step(iter_num)
+                        sampler.sweep(iter_num)
         print(f'# of switches: {num_switches}')
         print(f'Time it took for {i}th batch: {time.time()-start}')
 
@@ -285,10 +329,19 @@ if __name__ == '__main__':
                         help='kind of sampling to do; options include "gibbs", "gibbs_mixture" and "mh_{num_masks}"')
     parser.add_argument('--epsilon', type=float,
                         help='epsilon when using gibbs_mixture')
+    parser.add_argument('--sweep_order', type=str, required = True,
+                        choices=['ascend','descend','random_sweep','random'])
+    parser.add_argument('--adjacent_block', dest='adjacent_block', action='store_true', default=False)
     args = parser.parse_args()
 
     if 'mh' in args.sampling_method:
         args.num_masks = int(args.sampling_method.split('_')[1])
+
+    if 'gibbs' in args.sampling_method:
+        assert args.temp==1, 'temp is only for MH'
+
+    if args.adjacent_block:
+        assert 'mh' in args.sampling_method, 'adjacent_block is only for MH'
 
     print('running with args', args)
 
