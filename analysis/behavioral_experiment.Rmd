@@ -11,6 +11,7 @@ library(lme4)
 library(lmerTest)
 library(gganimate)
 library(gifski)
+library(caret)
 ```
 
 # Import & clean data
@@ -40,8 +41,18 @@ d <- d.raw %>%
   mutate(response = as.numeric(response),
          normed_response = scale(response))
 
+d %>%
+  group_by(step, phase, sent_length, source, prob, prob_class, sentence, sentence_num, id) %>%
+  summarize(avg_response = mean(response)) %>%
+  arrange(-avg_response) %>%
+  rename(initial_state_prob_class = prob_class) %>%
+  unite(sentence_id, sentence_num, id) %>%
+  write_csv('../data/averaged_responses.csv')
+
 write_csv(d, '../data/cleaned_data.csv')
 ```
+
+Print some basic properties of our dataset.
 
 ```{r}
 trials_per_participant <- d %>%
@@ -51,8 +62,20 @@ trials_per_participant <- d %>%
 cat('we have data from', length(trials_per_participant$wID), 'uniqe participants\n')
 cat('for', d$sentence %>% unique() %>% length(), 'uniqe sentences\n')
 cat('and an average of', d %>% group_by(sentence) %>% tally() %>% ungroup() %>% summarize(m = mean(n)) %>% pull(m), 'responses per sentence')
-
 ```
+
+Let's look at how many sentences we have of each type.
+
+```{r}
+d %>%
+  group_by(source, phase, step, sentence) %>%
+  tally() %>%
+  mutate(step = ifelse(step > 1000, 1000, step)) %>%
+  group_by(source, phase) %>%
+  tally() 
+```
+
+Look at overall naturalness ratings for each sentence type.
 
 ```{r}
 d %>%
@@ -78,6 +101,26 @@ d %>%
 
 ggsave('./behavioral_means.pdf', width = 4, height = 3.5, units = 'in')
 ```
+
+```{r}
+library(lme4)
+library(xtable)
+library(lmerTest)
+library(broom.mixed)
+d %>%
+  filter(phase != 'early') %>%
+  ungroup() %>%
+  mutate(source = fct_relevel(source, 'bert', 'wiki', 'lstm', 'ngram')) %>%
+  mutate(sent_length = fct_relevel(sent_length, 'short')) %>%
+  lmer(response ~ sent_length * source + (1 + sent_length | wID),
+       control = lmerControl(optimizer = 'bobyqa'),
+       data = .) %>%
+  tidy() %>%
+  select(-effect) %>%
+  xtable() 
+```
+
+# Examine burn-in phase
 
 ```{r}
 d %>%
@@ -109,6 +152,105 @@ d %>%
 
 ggsave('./burn-in.pdf')
 ```
+Statistics for burn-in.
+
+```{r}
+d %>%
+  filter(source == 'bert') %>%
+  filter(step < 1000) %>%
+  lmer(response ~ poly(log1p(step), 2)   * prob_class + sent_length + (1  | wID),
+       contrasts = list(sent_length = contr.sum(3),
+                        prob_class = contr.sum(2)),
+       data = .) %>%
+  summary()
+```
+
+# Predict human judgements from features
+
+```{r}
+d.features <- read_csv('../data/EncodingModel/features.csv') %>%
+  mutate(num_chars = str_length(sentence), nADV = str_count(pos_list, "'ADV'"),
+         nPRON = str_count(pos_list, "'PRON'"), nAUX = str_count(pos_list, "'AUX'"),
+         nADJ = str_count(pos_list, "'ADJ'"), nNOUN = str_count(pos_list, "'NOUN'"),
+         nCCONJ = str_count(pos_list, "'CCONJ'"), nDET = str_count(pos_list, "'DET'"), 
+         nPUNCT = str_count(pos_list, "'PUNCT'"), nVERB = str_count(pos_list, "'VERB'"), 
+         nNUM = str_count(pos_list, "'NUM'"), nPROPN = str_count(pos_list, "'PROPN'"), 
+         nPART = str_count(pos_list, "'PART'"), nADP = str_count(pos_list, "'ADP'"), 
+         nSCONJ = str_count(pos_list, "'SCONJ'"), nINTJ = str_count(pos_list, "'INTJ'"), 
+        acl = str_count(dep_list, "'acl'"), 
+         acomp = str_count(dep_list, "'acomp'"),
+         advcl = str_count(dep_list, "'advcl'"),
+         advmod = str_count(dep_list, "'advmod'"),
+             agent= str_count(dep_list, "'agent'"),
+         amod = str_count(dep_list, "'amod'"), 
+        appos = str_count(dep_list, "'appos'"),
+          attr = str_count(dep_list, "'attr'"),
+         auxpass = str_count(dep_list, "'auxpass'"), 
+          aux = str_count(dep_list, "'aux'"),
+          case = str_count(dep_list, "'case'"),
+          cc = str_count(dep_list, "'cc'"),
+         ccomp = str_count(dep_list, "'ccomp'"),
+         conj = str_count(dep_list, "'conj'"), csubj = str_count(dep_list, "'csubj'"), 
+          compound = str_count(dep_list, "'compound'"), csubjpass = str_count(dep_list, "'csubjpass'"), 
+        dative = str_count(dep_list, "'dative'"),dep = str_count(dep_list, "'dep'"), 
+        det = str_count(dep_list, "'det'"), dobj = str_count(dep_list, "'dobj'"), 
+        expl = str_count(dep_list, "'expl'"),
+          intj = str_count(dep_list, "'intj'"),
+          mark = str_count(dep_list, "'mark'"),   meta = str_count(dep_list, "'meta'"),
+             neg= str_count(dep_list, "'neg'"), nounmod= str_count(dep_list, "'nounmod'"), 
+          npmod = str_count(dep_list, "'npmod'"),
+          nsubj= str_count(dep_list, "'nsubj'"),  
+         nsubjpass = str_count(dep_list, "'nsubjpass'"), 
+      nummod = str_count(dep_list, "'nummod'"), 
+           oprd= str_count(dep_list, "'oprd'"),
+         parataxis = str_count(dep_list, "'parataxis'"), pcomp = str_count(dep_list, "'pcomp'"),
+          pobj = str_count(dep_list, "'pobj'"),  poss = str_count(dep_list, "'poss'"), 
+        preconj = str_count(dep_list, "'preconj'"),  predet = str_count(dep_list, "'predet'"), 
+      prep = str_count(dep_list, "'prep'"),
+         # prt = str_count(dep_list, "'prt'"),
+            punct = str_count(dep_list, "'punct'"),
+           xcomp = str_count(dep_list, "'xcomp'"),  
+             relcl = str_count(dep_list, "'relcl'"), 
+             quantmod= str_count(dep_list, "'quantmod'")
+        )  %>%
+  filter(source %in% c('bert', 'wiki')) %>%
+  select(-step, -initial_state_prob_class, -sentence, -sentence_id, -pos_list, -tag_list, -dep_list)
+```
+
+First, let's restrict ourselves to just the converged BERT sentences. in addition to probability, it looks like the use of `npobj', and `nparataxis' helped?
+
+```{r message =F }
+train.control <- trainControl(method = "cv", number = 10)
+
+# Train the model
+step.model <- train(avg_response ~ ., data = d.features %>%
+                      select(-source, -phase),
+                    method = "lmStepAIC", 
+                    #tuneGrid = data.frame(nvmax = 1:38),
+                    trControl = train.control)
+best.lm <- step.model$finalModel
+dat <- step.model$trainingData
+```
+
+```{r}
+best.lm %>%  summary()
+```
+
+Now let's look at the full dataset and see how much variance is accounted for by  corpus after controlling for all of these features?
+
+```{r}
+best.lm
+more.best.lm = update(best.lm,~ . + source, data = d.features %>%
+  mutate(`.outcome` = avg_response, 
+         sent_lengthmedium = as.numeric(sent_length == 'medium'), 
+         sent_lengthshort = as.numeric(sent_length == 'short')))
+
+anova(best.lm, more.best.lm, test = 'Rao')
+```
+
+# Supplemental
+
+## Let's show variation across sentences?
 
 ```{r}
 d %>%
@@ -125,6 +267,7 @@ d %>%
 
 ggsave('./item-level-variation.pdf')
 ```
+
 
 ```{r}
 d %>%
@@ -145,110 +288,41 @@ d %>%
 
 
 ```{r}
+d.cors <- d %>%
+    filter(source %in% c('wiki', 'bert')) %>%
+    group_by(source, prob, sentence, sent_length, sentence_num, id) %>%
+    summarize(m = mean(response)) %>% 
+    group_by(source, sent_length) %>%
+    summarize(c = cor(prob, m, method = 'spearman'))
+```
+
+```{r}
+library(broom)
+d.cors <- d %>%
+    filter(source %in% c('wiki', 'bert')) %>%
+    #filter(prob > -200) %>%
+    group_by(source, prob, sentence, sent_length, sentence_num, id) %>%
+    summarize(m = mean(response)) %>% 
+    group_by(source, sent_length) %>%
+    group_modify(~ {cor.test(.$prob, .$m, method = 'spearman') %>% tidy()}) %>%
+    mutate(r = paste0('r = ', round(estimate, 2), ifelse(p.value < 0.01, '**', ' (n.s.)')))
+
 d %>%
   filter(source %in% c('bert', 'wiki')) %>%
+  filter(prob > -200) %>%
   group_by(source, prob, sent_length, sentence_num, id) %>%
   summarize(m = mean(response)) %>%
   ggplot(aes(x = prob, y = m, color = source)) +
     geom_jitter(alpha = 0.5, width = 0.2) +
-    geom_smooth(se = F, method = 'lm', formula = y ~ poly(x,1), span = 1) +
-    facet_grid(source ~ sent_length ) +
+    geom_smooth(se = F, method = 'lm', formula = y ~ poly(x,1)) +
+    geom_text(aes(label = r, x = -2, y = 0), hjust = 1, data = d.cors) +
+    facet_grid(source ~ sent_length, scales = 'free_x' ) +
     theme_few() +
-    xlim(-75, 0) +
+    ylim(-4,100) +
+    labs(y = 'naturalness rating', x = 'log probability of sentence') +
+    guides(color = F) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave('prob-response-relationship.pdf', width = 6, height = 4, units = 'in')
 ```
-
-```{r}
-library(lme4)
-library(lmerTest)
-lmer(response ~ prob * source + (1  | wID),
-     data = d) %>%
-  summary()
-```
-
-```{r}
-d %>%
-  filter(source == 'bert') %>%
-  filter(step < 1000) %>%
-  lmer(response ~ log1p(step) * sent_length + (1  | wID),
-       contrasts = list(sent_length = contr.sum(3)),
-       data = .) %>%
-  summary()
-```
-
-```{r}
-d %>%
-  group_by(step, phase, sent_length, source, prob, prob_class, sentence, sentence_num, id) %>%
-  summarize(avg_response = mean(response)) %>%
-  arrange(-avg_response) %>%
-  rename(initial_state_prob_class = prob_class) %>%
-  unite(sentence_id, sentence_num, id) %>%
-  write_csv('../data/averaged_responses.csv')
-```
-
-# Visualize chains
-
-```{r}
-tsne <- read_csv('./tsne_out.csv') %>%
-  filter(edit_rate > 0) %>%
-  mutate(step = substep + (max(substep) + 1) * iter_num) %>%
-  select(sentence, step, x_tsne, y_tsne) %>%
-  mutate(prev_x = lag(x_tsne) ,
-         prev_y = lag(y_tsne))
-
-tsne %>%
-  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
-    geom_point(size = .5) +
-    geom_segment(aes(xend = prev_x, yend = prev_y), 
-                 arrow.fill = NULL) +
-                 # arrow = arrow(length = unit(0.30,"cm"), 
-                 #               angle = 15, 
-                 #               type = "closed")) +
-    # uncomment this line to see text labels
-    #geom_text(aes(label=sentence), size = 1)+
-    theme_few(20) +
-    scale_shape_manual(values = c(21)) +
-    scale_alpha_continuous(range = c(0.5, 1))+
-    scale_color_gradientn(colours = viridis(5))+
-    theme(axis.title=element_blank(),
-        axis.text=element_blank(),
-        axis.ticks=element_blank()) +
-    labs(x = "", y = "") +
-    guides(color = F, shape = F, alpha = F) +
-    theme(aspect.ratio = 1)  #+
-
-ggsave(filename = 'tsne.pdf',
-       width = 20, height = 20)
-
-```
-
-## make a tsne animation
-
-```{r}
-out <- tsne %>%
-  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
-    geom_point() +
-    geom_segment(aes(xend = prev_x, yend = prev_y), arrow.fill = NULL) +
-    theme_few(12) +
-    scale_shape_manual(values = c(21)) +
-    scale_alpha_continuous(range = c(0.5, 1))+
-    scale_color_gradientn(colours = viridis(5))+
-    guides(color = F, shape = F, alpha = F) +
-    theme(aspect.ratio = 1)  +
-    labs(title = '{tsne %>% filter(step == closest_state) %>% pull(sentence)}', x = "", y = "") +
-    theme(axis.title=element_blank(),
-        axis.text=element_blank(),
-        axis.ticks=element_blank()) +
-    #transition_time(step) +
-    transition_states(step, transition_length = 0, state_length = .1) +
-    shadow_mark() 
-
-#animate(out, nframes = 1000, renderer = gifski_renderer('tsne-animation.gif'))
-a <- animate(out, nframes = 1000, renderer = av_renderer('tsne.mp4'))
-anim_save(filename = "tsne-animation.mp4")
-
-```
-
-
-
 

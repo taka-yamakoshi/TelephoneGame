@@ -1,0 +1,385 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Imports
+
+```{r}
+library(tidyverse)
+library(tidyboot)
+library(ggthemes)
+library(lme4)
+library(lmerTest)
+library(reticulate)
+library(caret)
+
+## little function that converts pkls to r dfs
+pkl_to_df <- function(x) {
+  x %>%
+    stack() %>%
+    rename(word = ind, count = values)
+}
+
+geom_segment_plus <- function (mapping = NULL, data = NULL, stat = "identity",
+  position = "identity", arrow = NULL, lineend = "butt", na.rm = FALSE, ...) {
+ 
+  GeomSegmentPlus$new(mapping = mapping, data = data, stat = stat,
+    position = position, arrow = arrow, lineend = lineend, na.rm = na.rm, ...)
+}
+ 
+GeomSegmentPlus <- ggproto(ggplot2:::Geom, expr={
+  objname <- "segmentplus"
+ 
+  draw <- function(., data, scales, coordinates, arrow = NULL,
+    lineend = "butt", na.rm = FALSE, ...) {
+ 
+    data <- remove_missing(data, na.rm = na.rm,
+      c("x", "y", "xend", "yend", "linetype", "size", "shape","shorten.start","shorten.end","offset"),
+      name = "geom_segment_plus")
+    if (empty(data)) return(zeroGrob())
+ 
+    if (is.linear(coordinates)) {
+    data = coord_transform(coordinates, data, scales)
+      for(i in 1:dim(data)[1] )
+      {
+        match = data$xend == data$x[i] & data$x == data$xend[i] & data$yend == data$y[i] & data$y == data$yend[i]
+        #print("Match:")
+        #print(sum(match))
+        if( sum( match ) == 0 ) data$offset[i] <- 0
+      }
+ 
+      data$dx = data$xend - data$x
+      data$dy = data$yend - data$y
+      data$dist = sqrt( data$dx^2 + data$dy^2 )
+      data$px = data$dx/data$dist
+      data$py = data$dy/data$dist
+ 
+      data$x = data$x + data$px * data$shorten.start
+      data$y = data$y + data$py * data$shorten.start
+      data$xend = data$xend - data$px * data$shorten.end
+      data$yend = data$yend - data$py * data$shorten.end
+      data$x = data$x - data$py * data$offset
+      data$xend = data$xend - data$py * data$offset
+      data$y = data$y + data$px * data$offset
+      data$yend = data$yend + data$px * data$offset
+      
+      return(with(data, 
+        segmentsGrob(x, y, xend, yend, default.units="native",
+        gp = gpar(col=alpha(colour, alpha), fill = alpha(colour, alpha),
+          lwd=size * .pt, lty=linetype, lineend = lineend),
+        arrow = arrow)
+      ))
+    }
+        print("carrying on")
+ 
+    data$group <- 1:nrow(data)
+    starts <- subset(data, select = c(-xend, -yend))
+    ends <- rename(subset(data, select = c(-x, -y)), c("xend" = "x", "yend" = "y"),
+      warn_missing = FALSE)
+    
+    pieces <- rbind(starts, ends)
+    pieces <- pieces[order(pieces$group),]
+    
+    GeomPath$draw_groups(pieces, scales, coordinates, arrow = arrow, ...)
+  }
+ 
+  
+  default_stat <- function(.) StatIdentity
+  required_aes <- c("x", "y", "xend", "yend")
+  default_aes <- function(.) aes(colour="black", size=0.5, linetype=1, alpha = NA,shorten.start=0,shorten.end=0,offset=0)
+  guide_geom <- function(.) "path"
+})
+
+```
+
+
+```{r}
+pd <- import("pandas")
+bert_vocab <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/VOCABFreqAll.pkl") %>% pkl_to_df() 
+books_vocab <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/VOCABFreqAll.pkl") %>% pkl_to_df() %>%
+  mutate(word = gsub("''", '"', word, fixed = T))
+
+# need to collapse wikipedia vocab to combine counts for upper-case and lower-case
+wiki_vocab <- pd$read_pickle("../data/LingFeatures/wiki/21TokenSents/VOCABFreqAll.pkl") %>% pkl_to_df() %>%
+  mutate(word = tolower(word)) %>%
+  group_by(word) %>%
+  summarize(count = sum(count)) 
+```
+
+# Lexical frequency 
+
+```{r}
+# Note that it matters where we compute the corpus frequencies; do we restrict to just words that appear in bert or the full corpus distribution?
+corpus_counts <- wiki_vocab %>%
+  filter(count > 2) %>%
+  full_join(books_vocab, by = 'word') %>%
+  rename(wiki_count = count.x, books_count = count.y) %>%
+  replace_na(list(wiki_count = 0, books_count = 0)) %>%
+  mutate(corpus_count = wiki_count + books_count,
+         corpus_freq = corpus_count / sum(corpus_count))
+
+lexical_counts <- bert_vocab %>%
+  #filter(!(word %in% c('|', ';', ':'))) %>%
+  left_join(corpus_counts, by =c('word')) %>%
+  rename(bert_count = count) %>%
+  replace_na(list(corpus_freq = 1e-8, corpus_count = 0)) %>%
+  mutate(bert_freq = bert_count / sum(bert_count))
+
+lexical_ranks <- lexical_counts %>%
+  mutate(bert_rank = length(bert_count) - rank(bert_count, ties.method = 'average') + 1,
+         corpus_rank = length(corpus_count) - rank(corpus_count, ties.method = 'average') + 1) %>%
+  select(bert_freq, word, bert_rank, corpus_freq, corpus_rank) %>%
+  pivot_longer(cols = c('bert_rank', 'corpus_rank', 'bert_freq', 'corpus_freq'), names_sep = '_', names_to = c('corpus', 'type'))
+```
+
+```{r}
+lexical_ranks %>%
+  pivot_wider(values_from = 'value', names_from = 'type')  %>%
+  ggplot(aes(x = rank, y = freq, color = corpus)) +
+    geom_line() +
+    theme_few() +
+    labs(x = '(log) rank of word',
+         y ='(log) frequency of word') +
+    scale_x_log10(labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+   scale_y_log10(labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    theme(aspect.ratio = 1, legend.position = 'top', legend.title = element_blank()) +
+    annotation_logticks()
+
+ggsave('zipf-distributions.pdf', width = 4, height =4, units = 'in')
+```
+
+```{r}
+lexical_ranks %>%
+  pivot_wider(values_from = 'value', names_from = 'corpus')  %>%
+  filter(type == 'rank') %>%
+  ggplot(aes(x = bert, y = corpus)) +
+    geom_point(alpha = 0.3) +
+    geom_abline(intercept = 0, slope = 1, alpha = 0.2) +
+    theme_few() +
+    labs(x = 'rank of word (BERT distribution)',
+         y ='rank of word (corpus distribution)') +
+  theme(aspect.ratio = 1) +
+    scale_x_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_y_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    annotation_logticks()
+
+ggsave('lexical-distributions.pdf', width = 4, height =4, units = 'in')
+```
+
+look at correlation
+
+```{r}
+lexical_counts %>%
+  filter(bert_count > 10) %>%
+  summarize(c = cor(corpus_count, bert_count, method = 'spearman'))
+```
+
+What are words that are common in bert, less common for corpus? 
+
+```{r}
+lexical_ranks %>%
+  pivot_wider(values_from = 'value', names_from = 'corpus') %>%
+  filter(type == 'rank') %>%
+  filter(bert < 50) %>%
+  mutate(diff = bert - corpus) %>%
+  arrange(diff)
+```
+
+What are words that are common for corpus, less common for bert? 
+
+```{r}
+lexical_ranks %>%
+  pivot_wider(values_from = 'value', names_from = 'corpus') %>%
+  filter(type == 'rank') %>%
+  filter(corpus < 100) %>%
+  mutate(diff = corpus- bert) %>%
+  arrange(diff)
+```
+
+```{r}
+pd <- import("pandas")
+bert_POS <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/POSFreqAll.pkl") %>% pkl_to_df() %>%
+  mutate(prop = count / sum(count)) %>% 
+  mutate(source = 'bert')
+
+books_POS <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/POSFreqAll.pkl") %>% pkl_to_df()
+wiki_POS <- pd$read_pickle("../data/LingFeatures/wiki/21TokenSents/POSFreqAll.pkl") %>% pkl_to_df() 
+combined_POS <- books_POS %>%
+  full_join(wiki_POS, by = 'word') %>%
+  mutate(count = count.x + count.y,
+         prop = count / sum(count)) %>%
+  select(word,count,prop) %>%
+ mutate(source = 'corpus')
+```
+
+```{r}
+d.arrows <- combined_POS %>% 
+  bind_rows(bert_POS) %>%
+  filter(prop > 0.01) %>%
+  select(-count) %>%
+  pivot_wider(names_from = 'source', values_from = 'prop') %>%
+  mutate(diff = bert - corpus)
+  
+d.arrows %>%
+  pivot_longer(names_to = 'source', values_to = 'prop', cols = c('bert', 'corpus')) %>%
+  mutate(word = fct_reorder(word, prop)) %>%
+  ggplot(aes(y = word, x = prop, group = word, fill = source, color = -diff)) +
+    geom_point(shape=21, size = 2, color = 'black') +
+    geom_line(alpha = 0.5, size = 3, lineend = 'round') +
+    theme_few() +
+    # geom_segment(aes(x=corpus, xend=bert, fill = NA, color = diff > 0, yend = word), 
+    #              data=d.arrows, arrow=arrow(angle = 10, type = 'closed', length = unit(0.5, "inches")), 
+    #              size=0, alpha = 0.35, lineend = 'round', linejoin = 'round') + 
+    theme(aspect.ratio = 1, legend.position = 'top') +
+    guides(color=F) +
+    labs(y = '', x = 'frequency of part of speech') +
+    scale_fill_manual(values = c('white', 'black')) +
+    scale_color_gradient2()
+
+ggsave('pos-distributions.pdf', width = 4, height = 4, units = 'in')
+```
+
+```{r}
+pd <- import("pandas")
+bert_DEP <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/DEPFreqAll.pkl") %>% pkl_to_df() %>%
+  filter(!(word %in% c("ROOT", 'det', 'punct','prep', 'aux'))) %>%
+  mutate(prop = count / sum(count)) %>% 
+  mutate(source = 'bert')
+
+books_DEP <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/DEPFreqAll.pkl") %>% pkl_to_df()
+wiki_DEP <- pd$read_pickle("../data/LingFeatures/wiki/21TokenSents/DEPFreqAll.pkl") %>% pkl_to_df() 
+
+combined_DEP <- books_DEP %>%
+  full_join(wiki_DEP, by = 'word') %>%
+  filter(!(word %in% c("ROOT", 'det', 'punct','prep', 'aux'))) %>%
+  mutate(count = count.x + count.y,
+         prop = count / sum(count)) %>%
+  select(word,count,prop) %>%
+ mutate(source = 'corpus')
+
+d.arrows.dep <- combined_DEP %>% 
+  bind_rows(bert_DEP) %>%
+  select(-count) %>%
+  pivot_wider(names_from = 'source', values_from = 'prop') %>%
+  mutate(diff = bert - corpus) 
+  #filter(corpus > 0.01) 
+  
+d.arrows.dep %>%
+  pivot_longer(names_to = 'source', values_to = 'prop', cols = c('bert', 'corpus')) %>%
+  mutate(word = fct_reorder(word, prop)) %>%
+  ggplot(aes(y = word, x = prop, group = word, fill = source, color = -diff)) +
+    geom_line(alpha = 0.5, size = 3, lineend = 'round') +
+    theme_few() +
+    # geom_segment_plus(aes(x=corpus, xend=bert, fill = NA, color = -diff, yend = word),
+    #              data=d.arrows.dep, arrow=arrow(angle = 30, type = 'closed', length = unit(0.05, "inches")),
+    #              size=1, alpha = 1, lineend = 'butt', linejoin = 'round') +
+    geom_point(shape=21, size = 2, color = 'black') +
+    theme(aspect.ratio = 1, legend.position = 'top') +
+    guides(color=F) +
+    xlim(0, .188) +
+    labs(y = '', x = 'frequency of dependency') +
+    scale_fill_manual(values = c('white', 'black')) +
+    scale_color_gradient2()
+
+ggsave('dep-distributions.pdf', width = 4, height =4, units = 'in')
+```
+
+
+```{r}
+pd <- import("pandas")
+bert_DEP_DIST <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/DEP_DISTFreqAll.pkl") %>% pkl_to_df() %>% 
+  mutate(source = 'bert') %>%
+  mutate(prop = count / sum(count)) %>%
+  mutate(word = as.numeric(word)) 
+books_DEP_DIST <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/DEP_DISTFreqAll.pkl") %>% pkl_to_df() %>%
+  mutate(source = 'books') %>%
+  mutate(word = as.numeric(word)) %>%
+  mutate(prop = count / sum(count))
+wiki_DEP_DIST <- pd$read_pickle("../data/LingFeatures/wiki/21TokenSents/DEP_DISTFreqAll.pkl") %>% pkl_to_df()  %>%
+  mutate(source = 'wiki') %>%
+    mutate(word = as.numeric(word)) %>%
+  mutate(prop = count / sum(count))
+
+combined_DEP_DIST <- books_DEP_DIST %>%
+  full_join(wiki_DEP_DIST, by = 'word') %>%
+  replace_na(list(count.y = 0, count.x = 0)) %>%
+  mutate(count = count.x + count.y,
+         prop = count / sum(count)) %>%
+  dplyr::select(word,count,prop) %>%
+   mutate(source = 'combined corpa')%>%
+  ungroup()  
+
+bert_DEP_DIST %>%
+  bind_rows(books_DEP_DIST) %>%
+  bind_rows(wiki_DEP_DIST) %>%
+  bind_rows(combined_DEP_DIST) %>%
+  #group_by(source) %>%
+  filter(word < 70) %>%
+  ggplot(aes(x = word, fill = source, weight = prop)) +
+    geom_histogram(aes(y=..density..), position = 'identity', bins = 20, alpha = 0.5) +
+    geom_density(position="identity", alpha = 0.3, adjust =.4) +
+    facet_wrap(~ source) +
+    theme_few() +
+    theme(aspect.ratio = 1, legend.position = 'none') 
+ggsave('dep_dist_density.pdf', width = 4, height = 4, units = 'in')
+```
+
+```{r}
+bert_DEP_DIST %>%
+  bind_rows(books_DEP_DIST) %>%
+  bind_rows(wiki_DEP_DIST) %>%
+  bind_rows(combined_DEP_DIST) %>%
+  filter(word < 75) %>%
+  ggplot(aes(x = as.numeric(word), fill = source, weight = prop)) +
+    #geom_histogram(aes(y=..density..), position = 'identity', bins = 20, alpha = 0.5) +
+    geom_density(position="identity", alpha = 0.3, adjust = 0.4) +
+    labs(x = 'dependency length') +
+    theme_few() +
+    facet_wrap(~ source)
+    theme(aspect.ratio = 1, legend.position = 'top', legend.title = element_blank()) 
+
+ggsave('dep_dist_density.pdf', width = 4, height = 5, units = 'in')
+```
+
+```{r}
+cdfs <- bert_DEP_DIST %>%
+  # bind_rows(books_DEP_DIST) %>%v
+  # bind_rows(wiki_DEP_DIST) %>%
+  bind_rows(combined_DEP_DIST) %>%
+  filter(word < 75) %>%
+  group_by(source) %>%
+  mutate(cdf = cumsum(prop)) %>%
+  ungroup() 
+
+cdfs %>% 
+  select(-count, -prop) %>%
+  spread(source, cdf) %>%
+  mutate(diff = abs(bert - `combined corpa`)) %>%
+  filter(diff == max(diff))
+  
+bert_vals = cdfs %>% filter(source == 'bert') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
+corpus_vals = cdfs %>% filter(source == 'combined corpa') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
+ks.test(bert_vals, corpus_vals, alternative = 'greater')
+
+cdfs %>%
+  ggplot(aes(x = as.numeric(word), color = source, y = cdf)) +
+    geom_line() +
+    #geom_density(position="identity", alpha = 0.3, adjust = 0.35) +
+    labs(x = 'dependency length') +
+    theme_few() +
+    theme(aspect.ratio = 1, legend.position = 'top', legend.title = element_blank()) 
+
+ggsave('dep_dist.pdf', width = 4, height = 5, units = 'in')
+```
+
+```{r}
+bert_DEP_DIST %>%
+  bind_rows(combined_DEP_DIST) %>%
+  group_by(source) %>% 
+  filter(count == max(count))
+  # replace_na(list(prop = 0)) %>%
+  # arrange(word) %>%
+  # filter(word < 70) %>%
+  # summarize(mean(as.numeric(word) * prop, rm.na = T)) 
+```

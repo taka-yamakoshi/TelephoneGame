@@ -5,22 +5,50 @@ output: html_notebook
 
 # Imports
 
-Dependencies
+Import dependencies
 
 ```{r}
 library(tidyverse)
 library(here)
+library(viridis)
 library(ggthemes)
 ```
 
-Import a chain of generated sentences.
+```{r}
+d.chains <- read_csv(here('data/21TokenSentsAll/bert_new_gibbs_input_1.csv')) %>%
+  mutate(algorithm = 'base') %>%
+  bind_rows(read_csv(here('data/21TokenSentsAll/bert_new_gibbs_mixture_0.001_input_1.csv')) %>% 
+              mutate(algorithm = 'mixture')) 
+```
+
+Squeeze
 
 ```{r}
-d.chains <- read_csv(here('data/21TokenSents/bert_new_gibbs_input_1.csv')) %>%
-  mutate(algorithm = 'base') %>%
-  bind_rows(read_csv(here('data/21TokenSents/bert_new_gibbs_mixture_0.001_input_1.csv')) %>% 
-              mutate(algorithm = 'mixture')) 
+d.chain.plot <- d.chains %>%
+  group_by(initial_sentence) %>%
+  mutate(prob_class = ifelse(first(prob) > -40, 'high', 'low')) %>%
+  filter(iter_num < 101) 
 
+d.chain.plot %>%
+  group_by(prob_class, iter_num) %>%
+  tidyboot_mean(prob) %>%
+  ggplot(aes(x = iter_num, y = empirical_stat, color = prob_class)) +
+    geom_point(size = 3) +
+    geom_line(size = 1) +
+    geom_errorbar(aes(ymin =ci_lower, ymax = ci_upper), size = 1, width =0) +
+    stat_smooth(aes(y = prob, group = interaction(chain_num, sentence_num)), 
+                data = d.chain.plot, geom="line", alpha=0.1, size=1, span=.5) +
+    theme_few() +
+    theme(aspect.ratio = 1, legend.position = 'none') +
+    labs(y = '(log) probability of sentence',
+         x = 'epoch')
+
+ggsave('squeeze.pdf', width = 3, height = 3, units = 'in')
+```
+
+read in a chain of generated sentences & compute autocorrelation between sentence probabilities at different lags
+
+```{r}
 d.lags <- d.chains %>%
   group_by(sentence_num, chain_num, algorithm) %>%
   mutate(`prevProb_1` = lag(prob),
@@ -43,25 +71,31 @@ d.lags <- d.chains %>%
   arrange(sentence_num, chain_num)
 ```
 
+# Make autocorrelation plot 
+
 ```{r}
 d.cors <- d.lags %>%
   group_by(sentence_num, chain_num, algorithm, lag) %>%
   summarize(correlation = cor(prob, prevProb)) %>%
   group_by(algorithm, lag) %>%
-  tidyboot_mean(correlation) 
+  tidyboot_mean(correlation) %>%
+  mutate(algorithm = ifelse(algorithm == 'base', 'pure Gibbs', 'mixture kernel'))
 
-ggplot(d.cors, aes(x = lag*5, y = empirical_stat, fill =algorithm, color = algorithm)) +
+ggplot(d.cors, aes(x = lag*5, y = empirical_stat, linetype = algorithm)) +
     geom_point(data = d.cors %>% filter(lag %in% c(1)), size = 2.5) +
-    geom_text(aes(label = algorithm), nudge_y = 0.05, data = d.cors %>% filter(lag %in% c(200))) +
+    geom_text(aes(label = algorithm), nudge_y = 0.025, hjust = 0, data = d.cors %>% filter(lag %in% c(200), algorithm == 'mixture kernel')) +
+    geom_text(aes(label = algorithm), nudge_y = 0.06, hjust = 0, data = d.cors %>% filter(lag %in% c(200), algorithm == 'pure Gibbs')) +
     geom_line() +
     geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper),  alpha = 0.1, color = NA) +
-    geom_hline(yintercept = 0.025, linetype = 'dotted') +
+    #geom_hline(yintercept = 0.05, linetype = 'dotted') +
     labs(y = 'auto-correlation', x = 'lag (epochs)') +
     theme_few() +
     theme(aspect.ratio = 1, legend.position = 'none')
 
 ggsave('autocorrelation.pdf', width = 3, height = 3, units = 'in')
 ```
+
+# Visualize edit rates 
 
 ```{r}
 d.chains %>%
@@ -75,5 +109,79 @@ d.chains %>%
     labs(y = 'edit rate', x = 'step')
 
 ggsave('edit_rates.pdf', width = 6, height = 3, units = 'in')
+```
+
+# Visualize chains
+
+```{r}
+library(ggnewscale)
+tsne <- read_csv('./tsne_out.csv') %>%
+  filter(edit_rate > 0) %>%
+  mutate(step = substep + (max(substep) + 1) * iter_num) %>%
+  select(sentence, sentence_num, step, x_tsne, y_tsne) %>%
+  group_by(sentence_num) %>%
+  mutate(prev_x = lag(x_tsne) ,
+         prev_y = lag(y_tsne)) %>%
+  filter(step < 16000)
+
+tsne %>%
+  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
+    geom_point(size = 10, color = 'grey', data = tsne %>% filter(step == 1)) +
+    scale_color_gradient(low = 'red', high=  'black')+
+    geom_point(size = .5, data = tsne %>% filter(sentence_num == 2)) +
+    geom_segment(aes(xend = prev_x, yend = prev_y), 
+                 arrow.fill = NULL, data = tsne %>% filter(sentence_num == 2)) +
+
+    new_scale_color() +
+    scale_color_gradient(low = 'blue', high=  'black')+
+    geom_point(size = .5, aes(color = step), data = tsne %>% filter(sentence_num == 6)) +
+    geom_segment(aes(xend = prev_x, yend = prev_y, color = step), 
+                 arrow.fill = NULL, data = tsne %>% filter(sentence_num == 6)) +
+
+      # uncomment this line to see text labels
+    #geom_text(aes(label=sentence), size = 1)+
+    scale_shape_manual(values = c(21)) +
+    scale_alpha_continuous(range = c(0.5, 1))+
+    theme_few(20) +
+    theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        legend.position = 'none') +
+    labs(x = "", y = "") +
+    guides(color = F, shape = F, alpha = F) +
+    theme(aspect.ratio = 1)  #+
+
+# ggsave(filename = 'tsne_text.pdf',
+#        width = 20, height = 20)
+ggsave(filename = 'tsne.pdf',
+       width = 5, height = 5)
+
+```
+
+## make a tsne animation
+
+```{r}
+out <- tsne %>%
+  ggplot(aes(x = x_tsne, y = y_tsne, color = step)) +
+    geom_point() +
+    geom_segment(aes(xend = prev_x, yend = prev_y), arrow.fill = NULL) +
+    theme_few(12) +
+    scale_shape_manual(values = c(21)) +
+    scale_alpha_continuous(range = c(0.5, 1))+
+    scale_color_gradientn(colours = viridis(5))+
+    guides(color = F, shape = F, alpha = F) +
+    theme(aspect.ratio = 1)  +
+    labs(title = '{tsne %>% filter(step == closest_state) %>% pull(sentence)}', x = "", y = "") +
+    theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank()) +
+    #transition_time(step) +
+    transition_states(step, transition_length = 0, state_length = .1) +
+    shadow_mark() 
+
+#animate(out, nframes = 1000, renderer = gifski_renderer('tsne-animation.gif'))
+a <- animate(out, nframes = 1000, renderer = av_renderer('tsne.mp4'))
+anim_save(filename = "tsne-animation.mp4")
+
 ```
 
