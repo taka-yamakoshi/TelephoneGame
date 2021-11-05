@@ -93,11 +93,19 @@ GeomSegmentPlus <- ggproto(ggplot2:::Geom, expr={
 
 ```
 
+# Lexical frequency 
+
+## Read in vocab frequency files
+
+Note that reticulate to import pkl might be broken; use `read_csv` instead.
 
 ```{r}
 pd <- import("pandas")
-bert_vocab <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/VOCABFreqAll.pkl") %>% pkl_to_df() 
-books_vocab <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/VOCABFreqAll.pkl") %>% pkl_to_df() %>%
+bert_vocab <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/VOCABFreqAll.pkl") %>%
+  pkl_to_df() 
+
+books_vocab <- pd$read_pickle("../data/LingFeatures/book/21TokenSents/VOCABFreqAll.pkl") %>% 
+  pkl_to_df() %>%
   mutate(word = gsub("''", '"', word, fixed = T))
 
 # need to collapse wikipedia vocab to combine counts for upper-case and lower-case
@@ -107,10 +115,10 @@ wiki_vocab <- pd$read_pickle("../data/LingFeatures/wiki/21TokenSents/VOCABFreqAl
   summarize(count = sum(count)) 
 ```
 
-# Lexical frequency 
 
 ```{r}
-# Note that it matters where we compute the corpus frequencies; do we restrict to just words that appear in bert or the full corpus distribution?
+# Note that it matters where we compute the corpus frequencies; 
+# do we restrict to just words that appear in bert or the full corpus distribution?
 corpus_counts <- wiki_vocab %>%
   filter(count > 2) %>%
   full_join(books_vocab, by = 'word') %>%
@@ -142,7 +150,7 @@ lexical_ranks %>%
     labs(x = '(log) rank of word',
          y ='(log) frequency of word') +
     scale_x_log10(labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-   scale_y_log10(labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_y_log10(labels = scales::trans_format("log10", scales::math_format(10^.x))) +
     theme(aspect.ratio = 1, legend.position = 'top', legend.title = element_blank()) +
     annotation_logticks()
 
@@ -197,6 +205,10 @@ lexical_ranks %>%
   arrange(diff)
 ```
 
+# POS comparisons
+
+## Read in part of speech frequencies
+
 ```{r}
 pd <- import("pandas")
 bert_POS <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/POSFreqAll.pkl") %>% pkl_to_df() %>%
@@ -212,6 +224,8 @@ combined_POS <- books_POS %>%
   select(word,count,prop) %>%
  mutate(source = 'corpus')
 ```
+
+## Make figure
 
 ```{r}
 d.arrows <- combined_POS %>% 
@@ -240,6 +254,9 @@ d.arrows %>%
 ggsave('pos-distributions.pdf', width = 4, height = 4, units = 'in')
 ```
 
+# Dependency comparison
+
+## Import dependency counts
 ```{r}
 pd <- import("pandas")
 bert_DEP <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/DEPFreqAll.pkl") %>% pkl_to_df() %>%
@@ -257,7 +274,11 @@ combined_DEP <- books_DEP %>%
          prop = count / sum(count)) %>%
   select(word,count,prop) %>%
  mutate(source = 'corpus')
+```
 
+## Make figure
+
+```{r}
 d.arrows.dep <- combined_DEP %>% 
   bind_rows(bert_DEP) %>%
   select(-count) %>%
@@ -286,6 +307,10 @@ ggsave('dep-distributions.pdf', width = 4, height =4, units = 'in')
 ```
 
 
+# Dependency distance comparison
+
+## Import dependency distances
+
 ```{r}
 pd <- import("pandas")
 bert_DEP_DIST <- pd$read_pickle("../data/LingFeatures/bert/21TokenSents/Lag500/DEP_DISTFreqAll.pkl") %>% pkl_to_df() %>% 
@@ -309,7 +334,11 @@ combined_DEP_DIST <- books_DEP_DIST %>%
   dplyr::select(word,count,prop) %>%
    mutate(source = 'combined corpa')%>%
   ungroup()  
+```
 
+## Make figures
+
+```{r}
 bert_DEP_DIST %>%
   bind_rows(books_DEP_DIST) %>%
   bind_rows(wiki_DEP_DIST) %>%
@@ -342,6 +371,8 @@ bert_DEP_DIST %>%
 ggsave('dep_dist_density.pdf', width = 4, height = 5, units = 'in')
 ```
 
+## Plot CDFs
+
 ```{r}
 cdfs <- bert_DEP_DIST %>%
   # bind_rows(books_DEP_DIST) %>%v
@@ -351,16 +382,6 @@ cdfs <- bert_DEP_DIST %>%
   group_by(source) %>%
   mutate(cdf = cumsum(prop)) %>%
   ungroup() 
-
-cdfs %>% 
-  select(-count, -prop) %>%
-  spread(source, cdf) %>%
-  mutate(diff = abs(bert - `combined corpa`)) %>%
-  filter(diff == max(diff))
-  
-bert_vals = cdfs %>% filter(source == 'bert') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
-corpus_vals = cdfs %>% filter(source == 'combined corpa') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
-ks.test(bert_vals, corpus_vals, alternative = 'greater')
 
 cdfs %>%
   ggplot(aes(x = as.numeric(word), color = source, y = cdf)) +
@@ -372,6 +393,27 @@ cdfs %>%
 
 ggsave('dep_dist.pdf', width = 4, height = 5, units = 'in')
 ```
+
+KS statistic (i.e. max difference between cdf curves)
+
+```{r}
+cdfs %>% 
+  select(-count, -prop) %>%
+  spread(source, cdf) %>%
+  mutate(diff = abs(bert - `combined corpa`)) %>%
+  filter(diff == max(diff))
+```
+
+KS test
+
+```{r}
+bert_vals = cdfs %>% filter(source == 'bert') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
+corpus_vals = cdfs %>% filter(source == 'combined corpa') %>% do(data.frame(val = rep(.$word, .$count))) %>% pull(val)
+ks.test(bert_vals, corpus_vals, alternative = 'greater')
+
+```
+
+???
 
 ```{r}
 bert_DEP_DIST %>%
