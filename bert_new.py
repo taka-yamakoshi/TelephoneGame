@@ -126,6 +126,7 @@ class MultiSiteMH():
         self.accept_rate = torch.zeros(self.sentences.shape[0],device=self.device)
         self.sweep_order = sweep_order
         self.adjacent_block = adjacent_block
+        self.total_score = self.get_total_score(self.sentences)
 
     def get_rand_list(self,seq_len):
         # exclude first/last tokens (CLS/SEP) from positions
@@ -170,7 +171,9 @@ class MultiSiteMH():
         self.accept_rate = torch.mean(accept_locs, axis=1)
 
     def sample_words(self, probs, pos, sentences):
-        old_score = self.get_total_score(sentences)
+        #old_score = self.get_total_score(sentences)
+        #assert torch.all(self.total_score==old_score)
+        old_score = self.total_score.clone()
         old_words = sentences[:,pos]
         #Propose a set of words
         new_words = torch.tensor([list(torch.multinomial(prob, num_samples=1).squeeze(dim=-1)) for prob in torch.exp(probs)],device=self.device)
@@ -189,6 +192,9 @@ class MultiSiteMH():
         chosen_sentences = sentences.clone()
         chosen_sentences[:,pos] = chosen_words
         edit_rate = chosen_sentences[:,pos]!=sentences[:,pos]
+        chosen_score = old_score.clone()
+        chosen_score[accept] = new_score[accept]
+        self.total_score = chosen_score
         return chosen_sentences, edit_rate.float(), accept.float()
 
     def mask_prob(self, position, sentences, temp=1):
@@ -216,8 +222,8 @@ def run_chains(args) :
         input_sentences = f.read().split('\n')[:-1]
         batch_num = len(input_sentences)
 
-    # Load wiki sentences (when running 'gibbs_mixture' these will be used as new initial sentences)
-    if args.sampling_method=='gibbs_mixture':
+    # Load wiki sentences (when running 'gibbs_mixture' or 'mh_mixture' these may be used as new initial sentences)
+    if 'mixture' in args.sampling_method and not args.mask_initialization:
         files = glob.glob(f'{os.environ.get("WIKI_PATH")}/Samples/CleanedSamples/{args.num_tokens}TokenSents/*.csv')
         assert len(files)==1
         with open(files[0],'r') as f:
@@ -232,15 +238,15 @@ def run_chains(args) :
     # Set up output dirs/files
     os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
 
-    if args.sampling_method=='gibbs_mixture':
+    if 'mixture' in args.sampling_method:
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.epsilon}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.epsilon}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     elif args.adjacent_block:
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_new_{args.sampling_method}_adjacent_{args.sweep_order}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_new_{args.sampling_method}_adjacent_{args.sweep_order}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     else:
         f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
-        +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.sentence_id}_{args.temp}.csv'
+        +f'bert_new_{args.sampling_method}_{args.sweep_order}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
 
     for i, input_sentence in enumerate(input_sentences):
@@ -250,24 +256,29 @@ def run_chains(args) :
         # set up the input
         words = input_sentence.capitalize()
         tokenized_sentence = tokenizer(words, return_tensors="pt")
-        assert len(tokenized_sentence["input_ids"][0]) == args.num_tokens, 'number of tokens in the initial sentence does not match the num_tokens argument'
-        init_input = (tokenized_sentence["input_ids"][0]
-                      .to(args.device)
-                      .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
+        if args.mask_initialization:
+            init_input = (torch.tensor([args.cls_id]+[args.mask_id for _ in range(args.num_tokens-2)]+[args.sep_id])
+                          .to(args.device)
+                          .expand((args.batch_size, -1)))
+        else:
+            init_input = (tokenized_sentence["input_ids"][0]
+                          .to(args.device)
+                          .expand((args.batch_size, -1)))#, init_sentence.shape[0])))
+        assert init_input.shape[1] == args.num_tokens, 'number of tokens in the initial sentence does not match the num_tokens argument'
         # reset writer
         writer.reset(i, words)
 
         # set up the sampler
         if 'gibbs' in args.sampling_method:
-            sampler = UniformGibbs(init_input, args.temp, model, mask_id, args.device, args.sweep_order)
+            sampler = UniformGibbs(init_input, args.temp, model, args.mask_id, args.device, args.sweep_order)
         elif 'mh' in args.sampling_method:
-            sampler = MultiSiteMH(init_input, args.temp, model, mask_id, args.num_masks, args.device, args.sweep_order, args.adjacent_block)
+            sampler = MultiSiteMH(init_input, args.temp, model, args.mask_id, args.num_masks, args.device, args.sweep_order, args.adjacent_block)
 
         switch = 0
         num_switches = 0
         for iter_num in range(args.chain_len):
             # write out all steps for iter_num<100
-            if iter_num<100:
+            if iter_num<args.step_writeout:
                 seq_len = sampler.sentences.shape[1]
                 if 'gibbs' in args.sampling_method:
                     # exclude first/last tokens (CLS/SEP) from positions
@@ -283,27 +294,40 @@ def run_chains(args) :
                     mask_pos_list = sampler.get_mask_pos_list(rand_list,seq_len)
                     for pos_id,pos in enumerate(mask_pos_list):
                         writer.write(iter_num, sampler.sentences,
-                                     sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
+                                     sampler.total_score.cpu().detach().numpy(),
                                      sampler.edit_rate,pos_id,0,sampler.accept_rate)
                         sampler.sentences, sampler.edit_rate, sampler.accept_rate = sampler.step(iter_num, pos)
 
             else:
                 if iter_num % args.sent_sample == 0:
-                    writer.write(iter_num, sampler.sentences,
-                                 sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
-                                 sampler.edit_rate,sampler.sentences.shape[1]-3,switch,sampler.accept_rate)
+                    if 'gibbs' in args.sampling_method:
+                        writer.write(iter_num, sampler.sentences,
+                                     sampler.get_total_score(sampler.sentences).cpu().detach().numpy(),
+                                     sampler.edit_rate,sampler.sentences.shape[1]-3,switch,sampler.accept_rate)
+                    elif 'mh' in args.sampling_method:
+                        writer.write(iter_num, sampler.sentences,
+                                     sampler.total_score.cpu().detach().numpy(),
+                                     sampler.edit_rate,sampler.sentences.shape[1]-3,switch,sampler.accept_rate)
                     switch = 0
                 sampler.sweep(iter_num)
-                if args.sampling_method=='gibbs_mixture' and iter_num>=1000 and torch.rand(1)<args.epsilon:
+                if 'mixture' in args.sampling_method and iter_num>=1000 and torch.rand(1)<args.epsilon:
                     switch = 1
                     num_switches += 1
 
-                    # Choose random wikipedia samples
-                    sampled_ids = torch.randperm(wiki_samples.shape[0],device=args.device)[:args.batch_size]
-                    new_init_input = wiki_samples[sampled_ids].to(args.device)
+                    if args.mask_initialization:
+                        new_init_input = (torch.tensor([args.cls_id]+[args.mask_id for _ in range(args.num_tokens-2)]+[args.sep_id])
+                                        .to(args.device)
+                                        .expand((args.batch_size, -1)))
+                    else:
+                        # Choose random wikipedia samples
+                        sampled_ids = torch.randperm(wiki_samples.shape[0],device=args.device)[:args.batch_size]
+                        new_init_input = wiki_samples[sampled_ids].to(args.device)
 
-                    #sampler = UniformGibbs(init_input, args.temp, model, mask_id)
-                    sampler = UniformGibbs(new_init_input, args.temp, model, mask_id, args.device, args.sweep_order)
+                    if 'gibbs' in args.sampling_method:
+                        sampler = UniformGibbs(new_init_input, args.temp, model, args.mask_id, args.device, args.sweep_order)
+                    elif 'mh' in args.sampling_method:
+                        sampler = MultiSiteMH(new_init_input, args.temp, model, args.mask_id, args.num_masks, args.device, args.sweep_order, args.adjacent_block)
+
                     for _ in range(100):
                         sampler.sweep(iter_num)
         print(f'# of switches: {num_switches}')
@@ -326,22 +350,31 @@ if __name__ == '__main__':
     parser.add_argument('--sent_sample', type=int, default = 5,
                         help='frequency of recording sentences')
     parser.add_argument('--sampling_method', type=str, required=True,
-                        help='kind of sampling to do; options include "gibbs", "gibbs_mixture" and "mh_{num_masks}"')
+                        help='kind of sampling to do; options include "gibbs", "gibbs_mixture", "mh_{num_masks}", "mh_mixture_{num_masks}"')
     parser.add_argument('--epsilon', type=float,
-                        help='epsilon when using gibbs_mixture')
+                        help='epsilon when using gibbs_mixture or mh_mixture')
     parser.add_argument('--sweep_order', type=str, required = True,
                         choices=['ascend','descend','random_sweep','random'])
     parser.add_argument('--adjacent_block', dest='adjacent_block', action='store_true', default=False)
+    parser.add_argument('--mask_initialization', dest='mask_initialization', action='store_true', default=False)
+    parser.add_argument('--step_writeout', type=int, default = 1000,
+                        help='number of sweeps, where you write out each step')
     args = parser.parse_args()
 
     if 'mh' in args.sampling_method:
-        args.num_masks = int(args.sampling_method.split('_')[1])
+        args.num_masks = int(args.sampling_method.split('_')[-1])
+        assert args.num_masks<args.num_tokens
 
     if 'gibbs' in args.sampling_method:
         assert args.temp==1, 'temp is only for MH'
 
     if args.adjacent_block:
         assert 'mh' in args.sampling_method, 'adjacent_block is only for MH'
+
+    if args.mask_initialization:
+        args.mask_init_id = '_mask_init'
+    else:
+        args.mask_init_id = ''
 
     print('running with args', args)
 
@@ -355,7 +388,9 @@ if __name__ == '__main__':
         args.device = torch.device("cpu")
     model.to(args.device)
     model.eval()
-    mask_id = tokenizer.encode("[MASK]")[1:-1][0]
+    args.mask_id = tokenizer.encode("[MASK]")[1:-1][0]
+    args.cls_id = tokenizer.encode("[MASK]")[0]
+    args.sep_id = tokenizer.encode("[MASK]")[-1]
 
     # launch chains
     run_chains(args)
