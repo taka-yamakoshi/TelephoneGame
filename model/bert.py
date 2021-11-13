@@ -358,7 +358,7 @@ if __name__ == '__main__':
                         choices=['ascend','descend','random_sweep','random'])
     parser.add_argument('--adjacent_block', dest='adjacent_block', action='store_true', default=False)
     parser.add_argument('--mask_initialization', dest='mask_initialization', action='store_true', default=False)
-    parser.add_argument('--step_writeout', type=int, default = 1000,
+    parser.add_argument('--step_writeout', type=int, default = 100,
                         help='number of sweeps, where you write out each step')
     args = parser.parse_args()
 
