@@ -5,45 +5,47 @@ Since I cannot track all the data directories with git, I describe the intended 
 
 ```
 .
-+-- initial_sentences
-|   +-- 10Tokens
++-- model
+|   +-- initial_sentences
+|     +-- 12Tokens
 |       +-- input.txt
-|   +-- 20Tokens
-|   +-- 30Tokens
-+-- BertData
+|     +-- 21Tokens
+|     +-- 37Tokens
++-- bert_corpus
 |   +-- ...
-|   +-- 12TokenSents
-|   +-- 13TokenSents: bert sentences generated with 13 tokens
+|   +-- 11TokenSents: bert sentences generated with 11 tokens
 |      +-- textfile
 |         +-- bert-base-uncased
-|            +-- 20_11000: batch_size and chain_len
+|            +-- 10_2000: batch_size and chain_len
 |               +-- bert_gibbs_~.csv: output files from `bert.py`
 |               +-- ...
-|               +-- TrackFreq: tracked sentence lengths, POS, TAG
-|                  +-- ~.csv: output files from `TrackFreq.py`
-|                  +-- ...
-|            +-- ...
-|         +-- bert-large-cased
 |      +-- datafile
 |         +-- bert-base-uncased: model name
-|            +-- 20_11000_10: batch_size, chain_len, and sent_sample
+|            +-- 5_51000_500_gibbs_mixture_random_mask_init_1_0
 |               +-- POSFreqAllBert.pkl: output files from `CountFreq.py`
 |               +-- ...
 |            +-- ...
-|         +-- bert-large-cased
-|   +-- 14TokenSents
-|   +-- 15TokenSents
+|   +-- 12TokenSents
+|   +-- 21TokenSents
+|   +-- 37TokenSents
 |   +-- ...
-+-- WikiData
-    +-- Extracted: raw wiki pages (.json files) extracted using `WikiExtracter.py`
++-- wikicorpus
+    +-- prepared_wikipedia
     +-- TokenSents: wiki sentences separated into groups with different numbers of tokens
        +-- ...
-       +-- 12TokenSents
-       +-- 13TokenSents: wiki sentences with 13 bert tokens
-          +-- AA.txt: wiki sentences separeted with '\n'
-          +-- AB.txt
-          +-- ...
-       +-- 14TokenSents
-       +-- 15TokenSents
+       +-- 20TokenSents
+       +-- 21TokenSents: wiki sentences with 21 bert tokens
+          +--textfile
+            +-- sentences.txt
+       +-- 22TokenSents
        +-- ...
++-- bookcorpus
+    +-- TokenSents: wiki sentences separated into groups with different numbers of tokens
+      +-- ...
+      +-- 20TokenSents
+      +-- 21TokenSents: wiki sentences with 21 bert tokens
+        +-- textfile
+          +-- sentences.txt
+      +-- 22TokenSents
+      +-- ...
 ```
