@@ -1,5 +1,6 @@
 # export WIKI_PATH='YOUR PATH TO WIKICORPUS'
-# python bert.py --sentence_id input --core_id 1 --num_tokens 21
+# export BERT_PATH='YOUR PATH TO BERT_DATA'
+# python bert.py --sentence_id input --core_id 1 --num_tokens 21 --sampling_method gibbs_mixture --epsilon 1e-3 --sweep_order random
 import torch
 import numpy as np
 import pickle
@@ -236,16 +237,16 @@ def run_chains(args) :
         assert wiki_samples.shape[1]==args.num_tokens
 
     # Set up output dirs/files
-    os.makedirs(f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
+    os.makedirs(f'{os.environ.get("BERT_PATH")}/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/', exist_ok=True)
 
     if 'mixture' in args.sampling_method:
-        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
+        f = f'{os.environ.get("BERT_PATH")}/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
         +f'bert_new_{args.sampling_method}_{args.sweep_order}_{args.epsilon}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     elif args.adjacent_block:
-        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
+        f = f'{os.environ.get("BERT_PATH")}/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
         +f'bert_new_{args.sampling_method}_adjacent_{args.sweep_order}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     else:
-        f = f'BertData/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
+        f = f'{os.environ.get("BERT_PATH")}/{args.num_tokens}TokenSents/textfile/{args.model_name}/{args.batch_size}_{args.chain_len}/'\
         +f'bert_new_{args.sampling_method}_{args.sweep_order}{args.mask_init_id}_{args.sentence_id}_{args.temp}.csv'
     writer = Writer(args, f)
 
@@ -341,9 +342,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_tokens',type=int, required = True,
                         help='number of tokens including special tokens')
     parser.add_argument('--model_name', type = str, default = 'bert-base-uncased')
-    parser.add_argument('--batch_size', type=int, default=20,
+    parser.add_argument('--batch_size', type=int, default=5,
                         help='number of sentences to maintain')
-    parser.add_argument('--chain_len', type=int, default = 10000,
+    parser.add_argument('--chain_len', type=int, default = 1000,
                         help='number of samples')
     parser.add_argument('--temp', type = float, default = 1,
                         help='softmax temperature')

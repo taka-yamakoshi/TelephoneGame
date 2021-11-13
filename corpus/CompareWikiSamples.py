@@ -9,8 +9,7 @@ import glob
 import time
 import matplotlib.pyplot as plt
 import math
-from CountFreq import ExtractFreq
-from ExtractFixedLenSents import TokenizerSetUp
+from CountFreq import ExtractFreqNew, TokenizerSetUpNew
 import itertools
 import seaborn as sns
 
@@ -31,37 +30,46 @@ def ExtractFeatures(folder_path,tokenizer,args):
     text = file[1:]
     probs = [float(row[head.index('prob_1')]) for row in text]
     sentences = [row[head.index('sentence')] for row in text]
-    doc = nlp.pipe(sentences)
     args.metric = 'pos'
-    pos_freq,_,sent_num_pos = ExtractFreq(doc,tokenizer,args)
+    pos_freq,_,sent_num_pos = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
     
     doc = nlp.pipe(sentences)
     args.metric = 'tag'
-    tag_freq,_,sent_num_tag = ExtractFreq(doc,tokenizer,args)
+    tag_freq,_,sent_num_tag = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
     
     doc = nlp.pipe(sentences)
     args.metric = 'dep'
-    dep_freq,_,sent_num_dep = ExtractFreq(doc,tokenizer,args)
-    print(sent_num_pos,sent_num_tag,sent_num_dep)
+    dep_freq,_,sent_num_dep = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
+    print(len(sentences),sent_num_pos,sent_num_tag,sent_num_dep)
     return (probs,pos_freq,tag_freq,dep_freq)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--corpus', type=str, choices=['wiki','book'])
     parser.add_argument('--num_tokens',type=int, required = True,
                         help='number of tokens including special tokens')
     parser.add_argument('--model',type=str, default='bert-base-uncased')
     args = parser.parse_args()
-    text_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/textfile/'
-    data_path = f'WikiData/TokenSents/{args.num_tokens}TokenSents/datafile/'
+    if args.corpus=='wiki':
+        text_path = f'wikicorpus/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        data_path = f'wikicorpus/TokenSents/{args.num_tokens}TokenSents/datafile/'
+    elif args.corpus=='book':
+        text_path = f'bookcorpus/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        data_path = f'bookcorpus/TokenSents/{args.num_tokens}TokenSents/datafile/'
     
     # Extract sent_prob from all Wikipedia sentences with num_tokens = args.num_tokens
-    folder_path_list = glob.glob(f'{text_path}SentProbs/*.csv')
-    arg = [(folder_id,folder_path) for folder_id,folder_path in enumerate(folder_path_list)]
-    with Pool(processes=100) as p:
-        prob_list = p.starmap(ExtractSentProbs,arg)
-    prob_all = np.array(list(itertools.chain.from_iterable(prob_list)))
+    with open(f'{text_path}SentProbs/sentences.csv','r') as f:
+        reader = csv.reader(f)
+        file = [row for row in reader]
+        head = file[0]
+        text = file[1:]
+        prob_all = np.array([float(row[head.index('prob_1')]) for row in text])
     print(prob_all.shape)
     print(prob_all[:10])
+    
+
+
+    '''
     # Load feature freq of all Wikipedia sentences with num_tokens = args.num_tokens
     with open(f'{data_path}POSFreqAll.pkl','rb') as f:
         pos_all = pickle.load(f)
@@ -69,20 +77,26 @@ if __name__ == '__main__':
         tag_all = pickle.load(f)
     with open(f'{data_path}DEPFreqAll.pkl','rb') as f:
         dep_all = pickle.load(f)
+    '''
 
     # Extract sent_prob and feature freq from sampled Wikipedia sentences
-    nlp = TokenizerSetUp()
+    nlp = TokenizerSetUpNew()
     from transformers import BertTokenizer
     tokenizer = BertTokenizer.from_pretrained(args.model)
+    from nltk.tokenize import sent_tokenize
+    
     folder_path_list = glob.glob(f'{text_path}SampledSents/*.csv')
     arg = [(folder_path,tokenizer,args) for folder_path in folder_path_list]
     with Pool(processes=50) as p:
         freq_dict_list = p.starmap(ExtractFeatures,arg)
     
     prob_sample = [line[0] for line in freq_dict_list]
+    '''
     pos_sample = [line[1] for line in freq_dict_list]
     tag_sample = [line[2] for line in freq_dict_list]
     dep_sample = [line[3] for line in freq_dict_list]
+    '''
+
     
     color_list = sns.color_palette('Set2')
     
@@ -97,6 +111,7 @@ if __name__ == '__main__':
     print(diff)
     print(diff.argmin())
     print(f'Closest sample: {folder_path_list[diff.argmin()]}')
+    
 
     fig = plt.figure(dpi=150,figsize=(10,10))
     for probs in prob_sample:
@@ -113,7 +128,8 @@ if __name__ == '__main__':
     plt.title(f'sent_prob distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
     plt.xlabel('sentence log likelihood')
     plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.num_tokens}_sent_prob.png')
+    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_sent_prob.png')
+
     
     # Compare POS
     fig = plt.figure(dpi=150,figsize=(10,10))
@@ -134,7 +150,7 @@ if __name__ == '__main__':
     plt.title(f'POS distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
     plt.xlabel('POS labels')
     plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.num_tokens}_pos.png')
+    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_pos.png')
     
     # Compare TAG
     fig = plt.figure(dpi=150,figsize=(10,10))
@@ -155,7 +171,7 @@ if __name__ == '__main__':
     plt.title(f'TAG distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
     plt.xlabel('TAG labels')
     plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.num_tokens}_tag.png')
+    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_tag.png')
     
     # Compare DEP
     fig = plt.figure(dpi=150,figsize=(10,10))
@@ -172,7 +188,7 @@ if __name__ == '__main__':
     plt.title(f'DEP distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
     plt.xlabel('dependency distance')
     plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.num_tokens}_dep.png')
+    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_dep.png')
 
     '''
     # Perform statistical test using area_between_curves?
