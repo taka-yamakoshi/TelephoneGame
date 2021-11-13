@@ -1,61 +1,61 @@
-sample_id,sent_id,initial_sentence,prob,prob_class,sent_length
-330,932629,His chorus identity is sometimes named Quaxo.,-53.03567123413086,low,short
-995,1421311,Such strongly audible ideals required an equally audible medium.,-51.11023712158203,low,short
-85,1367427,Ali Marpet's mother is Joy Rose.,-44.2984619140625,low,short
-232,406112,The production of Latvian euros began in July 2013.,-40.59741973876953,low,short
-468,586520,The route numbers generally increase moving north to south.,-39.4202995300293,low,short
-484,1478396,The individual diving competitions all consist of three rounds.,-20.4722900390625,high,short
-545,717691,About 170 campers attend the camps each week.,-18.73958969116211,high,short
-574,1359180,The theme song was composed by Alan Thicke.,-11.046525955200195,high,short
-695,780378,She grew up with three brothers and ten sisters.,-8.712162017822266,high,short
-601,1371762,A total of 16 teams were invited to participate.,-5.408510208129883,high,short
-410,1166202,"They then launched the Great Dickens Christmas Fair in San Francisco, an indoor event, in 1970.",-74.87278747558594,low,medium
-588,2001773,The Hats eagerly caught at the opportunity of recovering the lost lands and their own prestige with it.,-70.96920776367188,low,medium
-163,417512,"If person wants to transport a bike in a Prague train, ticket for oversized luggage is needed.",-68.75541687011719,low,medium
-760,1434777,This is introduced to increase government efficiency with 264 government tasks to be attached to the new system.,-61.50168991088867,low,medium
-1,2661329,He was also one of the rare contributors interpreting the existing contemporary caste system at a theoretical level.,-56.917640686035156,low,medium
-501,1053450,This company purchased all the water-bearing lands in the valley and began drilling artesian wells.,-20.609935760498047,high,medium
-622,2166262,"The growth rate is rapid in the first year, then slows down as the fish age.",-15.29083251953125,high,medium
-142,1472874,"1,253 people are employed in the secondary sector and there are 72 businesses in this sector.",-12.10147476196289,high,medium
-875,248289,Asparagine usually enters the citric acid cycle in humans as oxaloacetate.,-9.541655540466309,high,medium
-174,595107,"She had always dreamed of writing plays, and she began writing and acting in her teenage years.",-7.5777974128723145,high,medium
-921,1329856,"By the 1940s the AM broadcast industry had abandoned the Blaw-Knox design for the modern type of narrow, uniform cross section lattice mast, which had a better radiation pattern.",-95.90634155273438,low,long
-974,1114426,"Park features some of the most iconic and memorable styles in the Korean industry, ranging from her signature tail lilt eye make-up, to her bold hair styles and clothing.",-98.15050506591797,low,long
-660,1355732,"As suggested by the name of their competitions, the primary metrics used for the Formula teams are Design, Acceleration and Lap Time with Cost and Business Presentation as other important events.",-109.95130920410156,low,long
-545,1664962,"The brain waves are captured with the enclosed EEG headset, which allows the user to control an air stream with their concentration, thus lifting or lowering the delicate foam ball.",-104.68716430664062,low,long
-562,284255,"Salisbury’s great forte was in his painting of over forty large canvases of historical and national events, a field in which he was virtually unchallenged until 1951.",-100.18663024902344,low,long
-128,41022,"After spending the next several months in an Illinois hospital, Ellie was released into the custody of her husband, John, whom she was pleased to discover was still very much alive.",-35.544578552246094,high,long
-802,1435210,"It is used to house inmates arrested in their patrol area, with the exception of misdemeanors committed in the City of Las Vegas, which maintains its own jail.",-38.51839065551758,high,long
-683,659772,"Lake Superior has fewer dissolved nutrients relative to its water volume than the other Great Lakes and so is less productive in terms of fish populations and is an oligotrophic lake.",-29.608539581298828,high,long
-724,480032,"However, in the tenth and final round, Prescott was knocked down and then hurt by a series of punches from Alvarado, which forced the referee to stop the fight.",-26.27454376220703,high,long
-832,1873167,"Despite its high cover price, the book has been a best-seller, and soon its second edition will be published less than a year after it first appeared in bookstores.",-21.49395751953125,high,long
-330,932629,His chorus identity is sometimes named Quaxo.,-53.03567123413086,low,short
-995,1421311,Such strongly audible ideals required an equally audible medium.,-51.11023712158203,low,short
-85,1367427,Ali Marpet's mother is Joy Rose.,-44.2984619140625,low,short
-232,406112,The production of Latvian euros began in July 2013.,-40.59741973876953,low,short
-468,586520,The route numbers generally increase moving north to south.,-39.4202995300293,low,short
-484,1478396,The individual diving competitions all consist of three rounds.,-20.4722900390625,high,short
-545,717691,About 170 campers attend the camps each week.,-18.73958969116211,high,short
-574,1359180,The theme song was composed by Alan Thicke.,-11.046525955200195,high,short
-695,780378,She grew up with three brothers and ten sisters.,-8.712162017822266,high,short
-601,1371762,A total of 16 teams were invited to participate.,-5.408510208129883,high,short
-410,1166202,"They then launched the Great Dickens Christmas Fair in San Francisco, an indoor event, in 1970.",-74.87278747558594,low,medium
-588,2001773,The Hats eagerly caught at the opportunity of recovering the lost lands and their own prestige with it.,-70.96920776367188,low,medium
-163,417512,"If person wants to transport a bike in a Prague train, ticket for oversized luggage is needed.",-68.75541687011719,low,medium
-760,1434777,This is introduced to increase government efficiency with 264 government tasks to be attached to the new system.,-61.50168991088867,low,medium
-1,2661329,He was also one of the rare contributors interpreting the existing contemporary caste system at a theoretical level.,-56.917640686035156,low,medium
-501,1053450,This company purchased all the water-bearing lands in the valley and began drilling artesian wells.,-20.609935760498047,high,medium
-622,2166262,"The growth rate is rapid in the first year, then slows down as the fish age.",-15.29083251953125,high,medium
-142,1472874,"1,253 people are employed in the secondary sector and there are 72 businesses in this sector.",-12.10147476196289,high,medium
-875,248289,Asparagine usually enters the citric acid cycle in humans as oxaloacetate.,-9.541655540466309,high,medium
-174,595107,"She had always dreamed of writing plays, and she began writing and acting in her teenage years.",-7.5777974128723145,high,medium
-921,1329856,"By the 1940s the AM broadcast industry had abandoned the Blaw-Knox design for the modern type of narrow, uniform cross section lattice mast, which had a better radiation pattern.",-95.90634155273438,low,long
-974,1114426,"Park features some of the most iconic and memorable styles in the Korean industry, ranging from her signature tail lilt eye make-up, to her bold hair styles and clothing.",-98.15050506591797,low,long
-660,1355732,"As suggested by the name of their competitions, the primary metrics used for the Formula teams are Design, Acceleration and Lap Time with Cost and Business Presentation as other important events.",-109.95130920410156,low,long
-545,1664962,"The brain waves are captured with the enclosed EEG headset, which allows the user to control an air stream with their concentration, thus lifting or lowering the delicate foam ball.",-104.68716430664062,low,long
-562,284255,"Salisbury’s great forte was in his painting of over forty large canvases of historical and national events, a field in which he was virtually unchallenged until 1951.",-100.18663024902344,low,long
-128,41022,"After spending the next several months in an Illinois hospital, Ellie was released into the custody of her husband, John, whom she was pleased to discover was still very much alive.",-35.544578552246094,high,long
-802,1435210,"It is used to house inmates arrested in their patrol area, with the exception of misdemeanors committed in the City of Las Vegas, which maintains its own jail.",-38.51839065551758,high,long
-683,659772,"Lake Superior has fewer dissolved nutrients relative to its water volume than the other Great Lakes and so is less productive in terms of fish populations and is an oligotrophic lake.",-29.608539581298828,high,long
-724,480032,"However, in the tenth and final round, Prescott was knocked down and then hurt by a series of punches from Alvarado, which forced the referee to stop the fight.",-26.27454376220703,high,long
-832,1873167,"Despite its high cover price, the book has been a best-seller, and soon its second edition will be published less than a year after it first appeared in bookstores.",-21.49395751953125,high,long
+sent_id,initial_sentence,prob,prob_class,sent_length
+932629,His chorus identity is sometimes named Quaxo.,-53.03567123413086,low,short
+1421311,Such strongly audible ideals required an equally audible medium.,-51.11023712158203,low,short
+1367427,Ali Marpet's mother is Joy Rose.,-44.2984619140625,low,short
+406112,The production of Latvian euros began in July 2013.,-40.59741973876953,low,short
+586520,The route numbers generally increase moving north to south.,-39.4202995300293,low,short
+1478396,The individual diving competitions all consist of three rounds.,-20.4722900390625,high,short
+717691,About 170 campers attend the camps each week.,-18.73958969116211,high,short
+1359180,The theme song was composed by Alan Thicke.,-11.046525955200195,high,short
+780378,She grew up with three brothers and ten sisters.,-8.712162017822266,high,short
+1371762,A total of 16 teams were invited to participate.,-5.408510208129883,high,short
+1166202,"They then launched the Great Dickens Christmas Fair in San Francisco, an indoor event, in 1970.",-74.87278747558594,low,medium
+2001773,The Hats eagerly caught at the opportunity of recovering the lost lands and their own prestige with it.,-70.96920776367188,low,medium
+417512,"If person wants to transport a bike in a Prague train, ticket for oversized luggage is needed.",-68.75541687011719,low,medium
+1434777,This is introduced to increase government efficiency with 264 government tasks to be attached to the new system.,-61.50168991088867,low,medium
+2661329,He was also one of the rare contributors interpreting the existing contemporary caste system at a theoretical level.,-56.917640686035156,low,medium
+1053450,This company purchased all the water-bearing lands in the valley and began drilling artesian wells.,-20.609935760498047,high,medium
+2166262,"The growth rate is rapid in the first year, then slows down as the fish age.",-15.29083251953125,high,medium
+1472874,"1,253 people are employed in the secondary sector and there are 72 businesses in this sector.",-12.10147476196289,high,medium
+248289,Asparagine usually enters the citric acid cycle in humans as oxaloacetate.,-9.541655540466309,high,medium
+595107,"She had always dreamed of writing plays, and she began writing and acting in her teenage years.",-7.5777974128723145,high,medium
+1329856,"By the 1940s the AM broadcast industry had abandoned the Blaw-Knox design for the modern type of narrow, uniform cross section lattice mast, which had a better radiation pattern.",-95.90634155273438,low,long
+1114426,"Park features some of the most iconic and memorable styles in the Korean industry, ranging from her signature tail lilt eye make-up, to her bold hair styles and clothing.",-98.15050506591797,low,long
+1355732,"As suggested by the name of their competitions, the primary metrics used for the Formula teams are Design, Acceleration and Lap Time with Cost and Business Presentation as other important events.",-109.95130920410156,low,long
+1664962,"The brain waves are captured with the enclosed EEG headset, which allows the user to control an air stream with their concentration, thus lifting or lowering the delicate foam ball.",-104.68716430664062,low,long
+284255,"Salisbury’s great forte was in his painting of over forty large canvases of historical and national events, a field in which he was virtually unchallenged until 1951.",-100.18663024902344,low,long
+41022,"After spending the next several months in an Illinois hospital, Ellie was released into the custody of her husband, John, whom she was pleased to discover was still very much alive.",-35.544578552246094,high,long
+1435210,"It is used to house inmates arrested in their patrol area, with the exception of misdemeanors committed in the City of Las Vegas, which maintains its own jail.",-38.51839065551758,high,long
+659772,"Lake Superior has fewer dissolved nutrients relative to its water volume than the other Great Lakes and so is less productive in terms of fish populations and is an oligotrophic lake.",-29.608539581298828,high,long
+480032,"However, in the tenth and final round, Prescott was knocked down and then hurt by a series of punches from Alvarado, which forced the referee to stop the fight.",-26.27454376220703,high,long
+1873167,"Despite its high cover price, the book has been a best-seller, and soon its second edition will be published less than a year after it first appeared in bookstores.",-21.49395751953125,high,long
+0,numerous specialized army offices conducted research at tuto.,-49.305824,low,short
+1,"inside such hosts, they settle in the muscles.",-44.071228,low,short
+2,as of 2019 the website hosted over 200 biographies.,-32.62703,low,short
+3,his institute was instrumental in the international radiation research.,-38.52174,low,short
+4,thus the majestic nickname is also a humorous one.,-33.458775,low,short
+5,the main balcony is a half octagon.,-17.852531,high,short
+6,"food was running short, and nights were colder.",-16.38502,high,short
+7,"apart from teaching, he used to write poems.",-13.017937,high,short
+8,"in her career, she made over 60 films.",-8.281652,high,short
+9,the territory of the municipality is divided into parts.,-5.436755,high,short
+10,"team big band is sent packing, but not without determination to come back and win the honeymoon.",-70.81712,low,medium
+11,"confirming this speculation, websense security labs identified additional sites using the exploit on january 19.",-62.738045,low,medium
+12,"on june 12, the volcano ’ s first spectacular eruption sent an ash column into the atmosphere.",-66.71224,low,medium
+13,his politically oriented parents chose to make a statement by deciding to remain living in the changing neighborhood.,-53.073624,low,medium
+14,it's a parade full of colour accompanied with the music of steel drums and local artists.,-56.490788,low,medium
+15,"she has earned international acclaim for her experimental, documentary, animation, and cross - genre productions.",-27.740936,high,medium
+16,"the year 1525 in science and technology included many events, some of which are listed here.",-24.41972,high,medium
+17,"after receiving her primary and secondary education, schmidt enrolled in college where she majored in journalism.",-16.613504,high,medium
+18,a number of scottish rivers have identical or very similar names which can be a source of confusion.,-14.32192,high,medium
+19,he was given an envelope and told to write his name in pencil on the back of it.,-9.284489,high,medium
+20,"down by a significant score in the next day's game, nate kellogg, a newly acquired second baseman, moved over to pitch in relief in the 10 – 2 loss.",-94.22932,low,long
+21,"if the engine has multiple cylinders, most geometries for these are arranged so that all cylinders are never at dead centre together and so one may always be used for starting.",-93.2157,low,long
+22,"the home depot division supports the product marketing, innovation, and selling of andersen branded windows and patio doors sold through the retailer's over 2, 000 locations in north america.",-92.43299,low,long
+23,empirical studies have established a connection between a leader's tax policy and subsequent punitive electoral consequences as they represent a permanent transfer of purchasing power by the taxpayer to the government.,-87.52104,low,long
+24,"as shown above, creative industry may differ based on how the government defines its scope, which will impact how a creative economy is viewed, therefore both are seen as dynamic concepts.",-83.60022,low,long
+25,"the format also changed, with the top two teams in each group going through to a semi - final stage, instead of the winners of each group going straight into the final.",-16.734217,high,long
+26,"in 1513, balboa crossed the isthmus of panama, and led the first european expedition to see the pacific ocean from the west coast of the new world.",-17.959412,high,long
+27,"at the lower border of the piriformis muscle, the nerve turns backward and divides into upward and downward diverging branches, which enter the gluteus maximus.",-26.036049,high,long
+28,"during the early years, the station broadcast at a full - time power of 1, 000 watts, day and night, changing to a directional antenna pattern during the nighttime hours.",-24.779625,high,long
+29,"he has also been praised as a man of unquestionable character and has been singled out for his humble spirit, self - effacing manner, and humanitarianism.",-29.207157,high,long
