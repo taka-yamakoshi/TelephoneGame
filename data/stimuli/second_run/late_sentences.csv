@@ -4,7 +4,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 20,1_1995,34,69859,The club competed in the 2012 finals series and then competed in the New South Wales Rugby League Division One (NRL) before becoming the Parramatta Eels for the 2014-15 season.,low,-11.885743,gibbs,long,late,32
 20,1_1995,34,69859,"Publishers began favoring Forster over another publishing company's, and second sight made the recently widowed Forster shortly thereafter ask questions that hinted at rape by a seven-man posse.",low,-31.184792,MH,long,late,35
 20,2_1895,34,66359,"Or just because he was so ignorant and no one had told him what she did and why she did it? Dosadi tried to say something, but Frank ignored it completely.",low,-34.369164,gibbs,long,late,23
-20,2_1995,34,69859,"Where possible the death toll included Iowa State students and other disadvantaged youth and "nearly every Cedar Rapids football offensive lineman" trying to feed his family on a 1927 to 1930 basis.",low,-34.269894,MH,long,late,55
+20,2_1995,34,69859,"Where possible the death toll included Iowa State students and other disadvantaged youth and ""nearly every Cedar Rapids football offensive lineman"" trying to feed his family on a 1927 to 1930 basis.",low,-34.269894,MH,long,late,55
 20,3_1955,34,68459,The epidermal ACH antibody of 3 (parent) was established in 1974 as secondary antibody used for vertebrate retinopathy and other eukaryotic disorders.,low,-59.778008,gibbs,long,late,28
 20,3_1995,34,69859,"Getting better informed and keeping alive the 1st baseman's innocence, Quigley revolves around deified 1st baseman who tracks down what constitutes a date with a brain tumor cancer patient.",low,-36.314224,MH,long,late,41
 20,4_1995,34,69859,"She returned to the Fed cup, but lost to Kateryna Sokolayska 6:4 and Sofiya Semyonova 6:3 in the quarterfinals.",low,-21.738728,gibbs,long,late,33
@@ -13,7 +13,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 20,5_1995,34,69859,"After setting aside alcoholic beverages given to Venezuelan citizens without eyesight, Carmona, wearing traditional Venezuelan wannabe clothes, once again contracted scarlet fever at the k-12 level.",low,-18.852167,MH,long,late,40
 20,6_1515,34,53059,"In 2012, he and his wife, Suzy Roberts, convinced Ydue to change his stage name to James Christopher Perray. James Christopher Roberts was born in Tallahassee.",low,-54.864197,gibbs,long,late,29
 20,6_1995,34,69859,"Stadium officials in Linz, where Silicon Valley's star Derek Jeter was having already earned draft picks, took steps to inform stadium officials of the 1-1 tie.",low,-19.743458,MH,long,late,50
-20,7_1575,34,55159,"[Belgian kitchens] controlled for "heat water", and [Swedish kitchens] controlled for "fire mask water" ; [French kitchens] were "overcrowded".",low,-36.88499,gibbs,long,late,36
+20,7_1575,34,55159,"[Belgian kitchens] controlled for ""heat water"", and [Swedish kitchens] controlled for ""fire mask water""; [French kitchens] were ""overcrowded"".",low,-36.88499,gibbs,long,late,36
 20,7_1935,34,67759,"Handing out a martini glass to Brooklyn archivist's Adonis Ashcroft, the Buffalo Sabres squad leader barely slithered but was busy staring at the locker room squad leader.",low,-31.461243,MH,long,late,30
 20,8_1955,34,68459,"Indian National Congress (election commission), from Bhubaneswar won fifteen seats (1988 - 93) from Sri Kumari Dasgupta (Bharatiya Janata party).",low,-39.52856,gibbs,long,late,14
 20,8_1995,34,69859,I weep over french fries as my biggest fan's downright abuzz El Paso Magpies 1st baseman and legends left and right 2nd baseman share a two-seat cockpit.,low,-36.166416,MH,long,late,2
@@ -33,10 +33,10 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 21,5_1955,34,68459,"Can every board contain Gamma DB can every sequestrary board contain Gamma DB Erickson Dragons are quite large three map extensions three map extensions, their size differs from dragons.",low,-19.192665,MH,long,late,49
 21,6_1935,34,67759,"The reticulate columns however, undergo metamorphosis (the entire thorax is less thickened) and the reticulate column remains much like the larva.",low,-17.047678,gibbs,long,late,46
 21,6_1695,34,59359,Traditionally static resistance begins almost immediately; nowadays substruction resistance deals mostly with why minor motors are easily entered before starting and why major motors cannot easily be entered before starting.,low,-27.688137,MH,long,late,52
-21,7_1775,34,62159,(See seals and blazons to clarify.) A kind denouement at time featuring "willful capability browned the sun [an] ordinary will",low,-93.58159,gibbs,long,late,27
-21,8_1995,34,69859,"The United States is on the hunt for an "interplanetary" mystical artifact - called the "ring" - as part of an ongoing global "manhunt".",low,-15.200439,gibbs,long,late,36
+21,7_1775,34,62159,"(See seals and blazons to clarify.) A kind denouement at time featuring ""willful capability browned the sun [an] ordinary will.""",low,-93.58159,gibbs,long,late,27
+21,8_1995,34,69859,"The United States is on the hunt for an ""interplanetary"" mystical artifact - called the ""ring"" - as part of an ongoing global ""manhunt"".",low,-15.200439,gibbs,long,late,36
 21,8_1895,34,66359,"Among new China importers, new China rematerialization generally became characteristic, signifying particle movement southwesterly down grooves while particle movement down grooves generally became characteristic even earlier.",low,-25.967999,MH,long,late,54
-21,9_1995,34,69859,"""that would be most splendid,"" said auntie to Meg the snow fleeced bullfrog, who had noticed Esk in her sleep and over her little brother.",low,-65.15546,gibbs,long,late,44
+21,9_1995,34,69859,"""That would be most splendid,"" said auntie to Meg the snow fleeced bullfrog, who had noticed Esk in her sleep and over her little brother.",low,-65.15546,gibbs,long,late,44
 21,9_1995,34,69859,"Although standard fuel was well received, his Almoravid paramour complained anyhow and said he never listened to so many songs. Standard fuel supporters have filed lawsuits, including.",low,-18.88752,MH,long,late,15
 22,0_1995,34,69859,"By 1979 wheedle had resigned, to concentrate on supporting Sinn Fein, but was expelled by the association for setting up the anti-terrorism this caused to miners' demands.",low,-77.273056,gibbs,long,late,43
 22,0_1115,34,39059,"When Powderfinger helped take over SyFy started saving money and started his career saving money for the jelly roll clam band's $500,000 tour of West Germany.",low,-25.293413,MH,long,late,11
@@ -75,7 +75,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 23,7_1835,34,64259,Hungarian television previously deported election activist: prime minister's electoral action Hungarian television punitive electoral action: there is penalty for shooting from a helicopter at an election activist previously deported.,low,-16.944504,MH,long,late,49
 23,8_1995,34,69859,"Arginine Arginine Arginine receptor 5 (g-protein-coupled receptor 5) is a known family of arginine receptors, consisting of fourteen members.",low,-13.724686,gibbs,long,late,56
 23,8_1995,34,69859,Albany police said motorists collided with mystics and autism apologists carrying two karaoke candy canes citing alleged child support violations and anger expressed by mystics carrying the flyers.,low,-48.14834,MH,long,late,26
-23,9_1815,34,63559,"Somewhere Jina was claiming re-entry; i had this ""crazy idea"" even though I'd already been looking for another link in the case when I first started.",low,-65.393906,gibbs,long,late,36
+23,9_1815,34,63559,"Somewhere Jina was claiming re-entry; I had this ""crazy idea"" even though I'd already been looking for another link in the case when I first started.",low,-65.393906,gibbs,long,late,36
 23,9_1995,34,69859,Advancing economics evolves numerical correlation - nearest hostile's shelved amongst its divergent presidential successes advancing economics eventually arose numerical correlation amongst presidential successes - nearest hostile Lancashire fusiliers Sgt.,low,-30.174236,MH,long,late,16
 24,0_1555,34,54459,"While filming matches, creative sector employees visited Shenzhen explaining why content aggregation video wrappers visited Shenzhen on two occasions; match fixing could occur if creative sector filmed matches using content aggregation.",low,-25.899073,MH,long,late,27
 24,1_1315,34,46059,"The five-bay facade is finished with tile blocks, at the top of which the roof shows a ""pellfish"" sign and a familiar metallated moustache.",low,-64.18086,gibbs,long,late,49
@@ -235,7 +235,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 480032,3_1995,34,69859,"Later when filming the music video for ""Little Angels Walk (Company!)"" Walker told merchant that ""You never know when you're going to have a kids"".",high,-71.22979,gibbs,long,late,58
 480032,3_1835,34,64259,"1965 - while filming second & third seasons, jellyfish performed yoga and meditation instead of other types of activities at Alvarado Beach, granted an exemption by the World Bank.",high,-29.601238,MH,long,late,15
 480032,4_1995,34,69859,"On March 31, the Kriegsmarine split the generalistreitfreundetrup at holbuschen (cuxhaven-osnabruck).",high,-57.936802,gibbs,long,late,49
-480032,4_1715,34,60059,"Train driver, perhaps 10th or 11th who Blackstone walked away from with arms wrapped around convergent guitar strings. Alvarado ; highjump driver Deedee Blackstone.",high,-41.623184,MH,long,late,4
+480032,4_1715,34,60059,"Train driver, perhaps 10th or 11th who Blackstone walked away from with arms wrapped around convergent guitar strings. Alvarado; highjump driver Deedee Blackstone.",high,-41.623184,MH,long,late,4
 480032,5_1915,34,67059,"37 athletes from 24 countries competed at the Fina Grand Prix from October to December, with an expiration alert date of 00:00 (UTC) in the following events.",high,-41.71154,gibbs,long,late,41
 480032,5_1975,34,69159,Knowing that all his increasingly meditative personal placekeeping produces unexpected results Antonio proves to be a fool having seen Joan Alvarado. Antonio has placed bets to avoid seeing Joan.,high,-40.268806,MH,long,late,10
 480032,6_1895,34,66359,"Although successful, the expedition collapsed, but the rebellion under standalone took part in the counterattack campaigns against Guangjing prefecture under Zhongyuan's control (Chongwen).",high,-92.58928,gibbs,long,late,8
@@ -663,7 +663,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 1166202,7_1995,18,37923,Heathrow Air Space Nederland Santa Cruz de Sao Paulo devoted its maturation years to aeronautics.,low,-20.55261,MH,medium,late,36
 1166202,8_1895,18,36023,"But the moment Cassie brushed aside the Remainingver, Cassie moaned as she slowly shook her head.",low,-46.079964,gibbs,medium,late,52
 1166202,8_1995,18,37923,In disguise; fully dressed Cordelia Mason visits San Francisco to change diapers. In disguise.,low,-12.196276,MH,medium,late,17
-1166202,9_1895,18,36023,"Now fully accredited. Alison Reid-Robertson, MP and member of Germany in the European parliament ;",low,-51.960617,gibbs,medium,late,7
+1166202,9_1895,18,36023,"Now fully accredited. Alison Reid-Robertson, MP and member of Germany in the European parliament.",low,-51.960617,gibbs,medium,late,7
 1166202,9_1995,18,37923,Birdsong stated that Overkill bootlegged San Francisco during their Senses Fail tour in protest.,low,-14.780876,MH,medium,late,7
 1434777,0_1695,18,32223,Or something else like the lounging in the spa that had not troubled him the night before.,low,-29.790821,gibbs,medium,late,25
 1434777,0_1995,18,37923,Could be used to distinguish silent plots from almost silent plots by match officials during match deciders.,low,-15.494131,MH,medium,late,49
@@ -697,7 +697,7 @@ sentence_num,id,step,count,sentence,prob_class,prob,source,sent_length,phase,.fo
 1472874,5_1995,18,37923,Patriarchal households have been particularly memorable for dinner parties often organized by cholas in Bohol.,high,-27.764223,MH,medium,late,51
 1472874,6_1295,18,24623,He is a txi teacher who directs and screeches through dreams with his light cane.,high,-49.002148,gibbs,medium,late,12
 1472874,6_1795,18,34123,"13,000 people attend the Hummingbird Baptist Church whose beliefs include altitude sickness and supernatural powers.",high,-15.510212,MH,medium,late,28
-1472874,7_1895,18,36023,11.9% is occupied by some heavy industry the following electoral districts subject to a redistribution ;,high,-19.149137,MH,medium,late,43
+1472874,7_1895,18,36023,11.9% is occupied by some heavy industry the following electoral districts subject to a redistribution.,high,-19.149137,MH,medium,late,43
 1472874,8_1895,18,36023,"Kade had been silent, as if considering what to say about the death of his baby sister.",high,-15.662962,gibbs,medium,late,50
 1472874,8_1695,18,32223,1 or 2. Use multiplayer from the ground up? Use Bayesian multiplayer with horizontally scrolling?,high,-19.028147,MH,medium,late,23
 1472874,9_1995,18,37923,He's an osprey (observer) suspicious of objects - both big and small.,high,-23.274427,gibbs,medium,late,1
