@@ -8,6 +8,9 @@ library(tidyverse)
 library(ggthemes)
 library(groupdata2)
 library(viridis)
+initial_sentences <- read_csv(here('./data/stimuli/initial_sentences.csv')) %>%
+  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
+  rename(initial_prob = prob)
 ```
 
 # Batch 1 
@@ -15,10 +18,6 @@ library(viridis)
 ```{r}
 bert_dir <- '../behavioral_experiment/stimuli/bert/'
 wiki_dir <- '../behavioral_experiment/stimuli/wiki/'
-
-initial_sentences <- read_csv('../behavioral_experiment/stimuli/initial_sentences.csv') %>%
-  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
-  rename(initial_prob = prob)
 
 wiki_stims <- bind_rows(
   read_csv(paste0(wiki_dir, '12TokenSents.csv')) %>% mutate(sent_length = 'short', source = 'wiki'),
@@ -166,4 +165,67 @@ out <- bind_rows(
   filter(.folds == 1)
 
 write_csv(out, file = '../behavioral_experiment/stimuli/grouped_stims_for_mongo_batch2.csv')
+```
+
+
+# Batch 3
+
+```{r}
+bert_dir <- here('data/stimuli/second_run/')
+stims <- bind_rows(
+  read_csv(paste0(bert_dir, '12TokenSents/gibbs.csv')) %>% mutate(sent_length = 'short', source = 'gibbs'),
+  read_csv(paste0(bert_dir, '12TokenSents/mh.csv')) %>% mutate(sent_length = 'short', source = 'MH'),
+  read_csv(paste0(bert_dir, '21TokenSents/gibbs.csv')) %>% mutate(sent_length = 'medium', source = 'gibbs'),
+  read_csv(paste0(bert_dir, '21TokenSents/mh.csv')) %>% mutate(sent_length = 'medium', source = 'MH'),
+  read_csv(paste0(bert_dir, '37TokenSents/gibbs.csv')) %>% mutate(sent_length = 'long', source = 'gibbs'),
+  read_csv(paste0(bert_dir, '37TokenSents/mh.csv')) %>% mutate(sent_length = 'long', source = 'MH')
+) 
+```
+
+```{r}
+samples.raw <- stims %>%
+  mutate(initial_sentence = str_to_lower(initial_sentence)) %>%
+  left_join(initial_sentences, by = c('initial_sentence', 'sent_length')) %>%
+  mutate(num_periods = str_count(sentence, fixed(".")),
+         sentence_num = sent_id) %>%
+  rename(epoch = iter_num) %>%
+  filter(num_periods == 1) %>%
+  group_by(sent_length) %>%
+  mutate(epoch_size = (max(step) + 1),
+         count = step + (epoch_size * epoch))
+
+samples.raw %>%
+  filter(count %in% c(0, 2^(0:13), max(count), max(count) - 100*seq(epoch_size))) %>%
+  group_by(sent_length, chain_num, sentence_num) %>%
+  mutate(sentence = gsub('[CLS] ', '', sentence, fixed = T),
+         sentence = gsub(' [SEP]', '', sentence, fixed = T)) %>%
+  select(sentence_num, chain_num, epoch, step, count, sentence, prob_class, prob, source, sent_length) %>%
+  ungroup() %>%
+  distinct(across(-chain_num), .keep_all = TRUE) %>%
+  write_csv(file = here('data/stimuli/second_run/possible_bert_sentences_uncleaned.csv'))
+```
+
+
+```{r}
+early_sentences <- read_csv(here('data/stimuli/second_run/early_sentences.csv')) %>%
+  # filter(count %in% 2^(0:13)) %>%
+  # group_by(sentence_num, sent_length, source, epoch, step, count) %>%
+  # sample_n(1) %>%
+  unite(id, chain_num, epoch) 
+
+late_sentences <-  read_csv(here('data/stimuli/second_run/late_sentences.csv')) %>%
+  select(-.folds)
+  # filter(count > 10000) %>%
+  # group_by(sentence_num, chain_num, sent_length, source) %>%
+  # filter(epoch == max(epoch)) %>%
+  # sample_n(1) %>%
+  # mutate(phase = 'late')
+
+bind_rows(
+  late_sentences, early_sentences
+  ) %>%
+  mutate(sentence_num = as.character(sentence_num)) %>%
+  ungroup() %>%
+  groupdata2::fold(60, cat_col = c('sent_length', 'phase', 'source', 'sentence_num')) %>%
+  write_csv(here('data/stimuli/second_run/grouped_stims.csv'))
 ```
