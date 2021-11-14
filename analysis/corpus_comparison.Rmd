@@ -15,13 +15,6 @@ library(reticulate)
 library(caret)
 library(here)
 
-## little function that converts pkls to r dfs
-pkl_to_df <- function(x) {
-  x %>%
-    stack() %>%
-    rename(word = ind, count = values)
-}
-
 geom_segment_plus <- function (mapping = NULL, data = NULL, stat = "identity",
   position = "identity", arrow = NULL, lineend = "butt", na.rm = FALSE, ...) {
  
@@ -106,7 +99,9 @@ gibbs_vocab <- read_csv(here("LingFeaturesNew/bert/11TokenSents/5_51000_500_gibb
 mh_vocab <- read_csv(here("LingFeaturesNew/bert/11TokenSents/5_51000_500_mh_mixture_1_random_sweep_mask_init_1_0.001/VOCABFreqAll.csv"))
 
 books_vocab <- read_csv(here("LingFeaturesNew/book/11TokenSents/VOCABFreqAll.csv")) %>% 
-  mutate(word = gsub("''", '"', word, fixed = T))
+  mutate(word = gsub("''", '"', word, fixed = T)) %>%
+  group_by(word) %>%
+  summarize(count = sum(count))
 
 # need to collapse wikipedia vocab to combine counts for upper-case and lower-case
 wiki_vocab <- read_csv(here("LingFeaturesNew/wiki/11TokenSents/VOCABFreqAll.csv")) %>%
@@ -136,7 +131,7 @@ mh_counts <- mh_vocab %>%
   mutate(mh_freq = mh_count / sum(mh_count))
 
 bert_counts <- gibbs_counts %>%
-  left_join(mh_counts, by =c('word')) %>%
+  left_join(mh_counts, by = c('word')) %>%
   filter(mh_count>0)
 
 lexical_counts <- bert_counts %>%
@@ -182,8 +177,8 @@ lexical_ranks %>%
     labs(x = 'rank of word (BERT distribution)',
          y ='rank of word (corpus distribution)') +
   theme(aspect.ratio = 1) +
-    scale_x_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-    scale_y_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_x_log10(limits = c(.4, 5000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_y_log10(limits = c(.4, 5000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
     annotation_logticks()
 
 ggsave('lexical-distributions_gibbs.pdf', width = 4, height =4, units = 'in')
@@ -199,8 +194,8 @@ lexical_ranks %>%
     labs(x = 'rank of word (BERT distribution)',
          y ='rank of word (corpus distribution)') +
   theme(aspect.ratio = 1) +
-    scale_x_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-    scale_y_log10(limits = c(.4, 12000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_x_log10(limits = c(.4, 5000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    scale_y_log10(limits = c(.4, 5000), labels = scales::trans_format("log10", scales::math_format(10^.x))) +
     annotation_logticks()
 
 ggsave('lexical-distributions_mh.pdf', width = 4, height =4, units = 'in')
@@ -225,7 +220,7 @@ What are words that are common in bert, less common for corpus?
 lexical_ranks %>%
   pivot_wider(values_from = 'value', names_from = 'corpus') %>%
   filter(type == 'rank') %>%
-  filter(gibbs < 50) %>%
+  filter(gibbs < 100) %>%
   mutate(diff = gibbs - corpus) %>%
   arrange(diff)
 ```
@@ -233,7 +228,7 @@ lexical_ranks %>%
 lexical_ranks %>%
   pivot_wider(values_from = 'value', names_from = 'corpus') %>%
   filter(type == 'rank') %>%
-  filter(mh < 50) %>%
+  filter(mh < 100) %>%
   mutate(diff = mh - corpus) %>%
   arrange(diff)
 ```
@@ -284,18 +279,16 @@ combined_POS <- books_POS %>%
 d.arrows <- combined_POS %>% 
   bind_rows(gibbs_POS) %>%
   bind_rows(mh_POS) %>%
-  #filter(prop > 0.01) %>%
-  filter(word != 'SPACE') %>%
+  filter(prop > 0.01) %>%
+  filter(word != 'PART') %>%
   select(-count) %>%
-  pivot_wider(names_from = 'source', values_from = 'prop')# %>%
-  #mutate(diff = gibbs - corpus)
+  pivot_wider(names_from = 'source', values_from = 'prop')
   
 d.arrows %>%
   pivot_longer(names_to = 'source', values_to = 'prop', cols = c('gibbs','mh', 'corpus')) %>%
   mutate(word = fct_reorder(word, prop)) %>%
   ggplot(aes(y = word, x = prop, group = word, fill = source)) +
-    geom_point(shape=21, size = 2, color = 'black') +
-    #geom_line(alpha = 0.5, size = 3, lineend = 'round') +
+    geom_point(shape=21, size = 3, color = "NA") +
     theme_few() +
     # geom_segment(aes(x=corpus, xend=bert, fill = NA, color = diff > 0, yend = word), 
     #              data=d.arrows, arrow=arrow(angle = 10, type = 'closed', length = unit(0.5, "inches")), 
@@ -303,7 +296,7 @@ d.arrows %>%
     theme(aspect.ratio = 1, legend.position = 'top') +
     guides(color=F) +
     labs(y = '', x = 'frequency of part of speech') +
-    scale_fill_manual(values = c('white', 'black','grey')) +
+    #scale_fill_manual(values = c('white', 'black','grey')) +
     scale_color_gradient2()
 
 ggsave('pos-distributions.pdf', width = 4, height = 4, units = 'in')
@@ -397,7 +390,6 @@ d.arrows.dep <- combined_DEP %>%
   bind_rows(mh_DEP) %>%
   select(-count) %>%
   pivot_wider(names_from = 'source', values_from = 'prop') %>%
-  #mutate(diff = bert - corpus) 
   filter(corpus > 0.01) 
   
 d.arrows.dep %>%
@@ -409,12 +401,12 @@ d.arrows.dep %>%
     # geom_segment_plus(aes(x=corpus, xend=bert, fill = NA, color = -diff, yend = word),
     #              data=d.arrows.dep, arrow=arrow(angle = 30, type = 'closed', length = unit(0.05, "inches")),
     #              size=1, alpha = 1, lineend = 'butt', linejoin = 'round') +
-    geom_point(shape=21, size = 2, color = 'black') +
+    geom_point(shape=21, size = 3, color="NA") +
     theme(aspect.ratio = 1, legend.position = 'top') +
     guides(color=F) +
     #xlim(0, .188) +
     labs(y = '', x = 'frequency of dependency') +
-    scale_fill_manual(values = c('white','black','grey')) +
+    #scale_fill_manual(values = c('white','black','grey')) +
     scale_color_gradient2()
 
 ggsave('dep-distributions.pdf', width = 4, height =4, units = 'in')
@@ -450,7 +442,7 @@ combined_DEP_DIST <- books_DEP_DIST %>%
   mutate(count = count.x + count.y,
          prop = count / sum(count)) %>%
   dplyr::select(word,count,prop) %>%
-   mutate(source = 'combined corpora')%>%
+   mutate(source = 'combined\ncorpora')%>%
   ungroup()
 ```
 
@@ -463,11 +455,11 @@ combined_DEP_DIST %>%
   bind_rows(gibbs_DEP_DIST) %>%
   bind_rows(mh_DEP_DIST) %>%
   #group_by(source) %>%
-  filter(word < 70) %>%
+  filter(word < 40) %>%
   ggplot(aes(x = word, fill = source, weight = prop)) +
-    geom_histogram(aes(y=..density..), position = 'identity', bins = 20, alpha = 0.5) +
+    geom_histogram(aes(y=..density..), position = 'identity', bins = 30, alpha = 0.5) +
     geom_density(position="identity", alpha = 0.3, adjust =.4) +
-    facet_wrap(~ source) +
+    facet_wrap(~factor(source,levels=c('wiki','book','combined\ncorpora','gibbs','mh'))) +
     theme_few() +
     theme(aspect.ratio = 1, legend.position = 'none') 
 ggsave('dep_dist_density.pdf', width = 4, height = 4, units = 'in')
@@ -497,7 +489,7 @@ ggsave('dep_dist_density.pdf', width = 4, height = 5, units = 'in')
 cdfs <- combined_DEP_DIST %>%
   bind_rows(gibbs_DEP_DIST) %>%
   bind_rows(mh_DEP_DIST) %>%
-  filter(word < 75) %>%
+  filter(word < 30) %>%
   group_by(source) %>%
   arrange(word,.by_group=TRUE) %>% 
   mutate(cdf = cumsum(prop)) %>%
@@ -505,7 +497,7 @@ cdfs <- combined_DEP_DIST %>%
 
 cdfs %>%
   ggplot(aes(x = as.numeric(word), color = source, y = cdf)) +
-    geom_line() +
+    geom_line(size=1.5) +
     #geom_density(position="identity", alpha = 0.3, adjust = 0.35) +
     labs(x = 'dependency length') +
     theme_few() +
