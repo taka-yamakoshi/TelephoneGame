@@ -18,25 +18,25 @@ library(ggthemes)
 # Squeeze plot (to check convergence)
 
 ```{r}
-d.chains <- read_csv(here('FrozenBertDataNew/BehavData/10_2000/21TokenSents/bert_new_gibbs_random_input_1.csv')) %>%
-  filter(step==0)
-
-d.chain.plot <- d.chains %>%
+d.chains <- read_csv(here('./data/FrozenBertDataNew/BehavData/10_2000/21TokenSents/bert_new_gibbs_random_input_1.csv')) %>%
+  bind_rows(read_csv(here('./data/FrozenBertDataNew/BehavData/10_2000/21TokenSents/bert_new_gibbs_random_input_new_1.csv'))) %>%
+  filter(step == 0) %>%
   group_by(initial_sentence) %>%
   mutate(prob_class = ifelse(sentence_num > 4, 'high', 'low')) %>%
-  filter(iter_num%%25==0) %>%
-  filter(iter_num < 501)
+  filter(iter_num < 400) %>%
+  filter(iter_num %in% seq(0,400,20))
 
-d.chain.plot %>%
+d.chains %>%
   group_by(prob_class, iter_num) %>%
-  tidyboot_mean(prob) %>%
+  tidyboot_mean(prob, nboot = 1000) %>%
   ggplot(aes(x = iter_num, y = empirical_stat, color = prob_class)) +
     geom_point(size = 3) +
     geom_line(size = 1) +
     geom_errorbar(aes(ymin =ci_lower, ymax = ci_upper), size = 1, width = 0) +
     stat_smooth(aes(y = prob, group = interaction(chain_num, sentence_num)), 
-                data = d.chain.plot, geom="line", alpha=0.1, size=1, span=.5) +
+                data = d.chains, geom="line", alpha=0.1, size=1, span=.5) +
     theme_few() +
+    ylim(-70, 0) +
     theme(aspect.ratio = 1, legend.position = 'none') +
     labs(y = 'sentence score',
          x = 'epoch')
@@ -47,11 +47,11 @@ ggsave('squeeze.pdf', width = 3, height = 3, units = 'in')
 # Auto-correlation plot (to check auto-correlation)
 
 ```{r}
-d.chains <- read_csv(here('FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_gibbs_mixture_random_0.001_mask_init_input_1.csv')) %>%
+d.chains <- read_csv(here('data/FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_gibbs_mixture_random_0.001_mask_init_input_1.csv')) %>%
   mutate(algorithm = 'gibbs_mixture') %>%
-  bind_rows(read_csv(here('FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_mh_mixture_1_random_sweep_0.001_mask_init_input_1.csv')) %>% 
+  bind_rows(read_csv(here('data/FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_mh_mixture_1_random_sweep_0.001_mask_init_input_1.csv')) %>% 
               mutate(algorithm = 'mh_mixture')) %>%
-  bind_rows(read_csv(here('FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_gibbs_random_mask_init_input_1.csv')) %>% 
+  bind_rows(read_csv(here('data/FrozenBertDataNew/StatData/5_51000/11TokenSents/bert_new_gibbs_random_mask_init_input_1.csv')) %>% 
               mutate(algorithm = 'gibbs')) %>%
   filter(step==8) %>%
   filter(iter_num%%10==0)
@@ -92,21 +92,22 @@ d.cors <- d.lags %>%
   summarize(correlation = cor(prob, prevProb)) %>%
   group_by(algorithm, lag) %>%
   tidyboot_mean(correlation) %>%
-  mutate(algorithm = ifelse(algorithm == 'gibb_mixture', 'gibbs mixture', algorithm)) %>%
-  mutate(algorithm = ifelse(algorithm == 'mh_mixture', 'mh mixture', algorithm))
+  mutate(algorithm = case_when(algorithm == 'gibbs_mixture' ~ 'GSN mixture', 
+                               algorithm == 'mh_mixture' ~ 'MH mixture',
+                               TRUE ~ 'no mixture'))
 ```
 
 ```{r}
 ggplot(d.cors, aes(x = lag*10, y = empirical_stat, linetype = algorithm)) +
     geom_point(data = d.cors %>% filter(lag %in% c(1)), size = 2.5) +
-    geom_text(aes(label = algorithm), nudge_y = 0.03, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'gibbs')) +
-    geom_text(aes(label = algorithm), nudge_y = 0.03, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'mh mixture')) +
-    geom_text(aes(label = algorithm), nudge_y = 0.03, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'gibbs mixture')) +
+    geom_text(aes(label = algorithm), nudge_y = 0.03, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'no mixture')) +
+    geom_text(aes(label = algorithm), nudge_y = 0.03, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'MH mixture')) +
+    geom_text(aes(label = algorithm), nudge_y = -0.05, hjust = 0, data = d.cors %>% filter(lag %in% c(100), algorithm == 'GSN mixture')) +
     geom_line() +
     geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper),  alpha = 0.1, color = NA) +
-    #geom_hline(yintercept = 0.05, linetype = 'dotted') +
     labs(y = 'auto-correlation', x = 'lag (epochs)') +
     theme_few() +
+    xlim(NA, 5000) +
     theme(aspect.ratio = 1, legend.position = 'none')
 
 ggsave('autocorrelation.pdf', width = 3, height = 3, units = 'in')
