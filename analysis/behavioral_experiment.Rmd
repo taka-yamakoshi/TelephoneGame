@@ -21,25 +21,36 @@ we exclude the expeirmenter's ID to make sure there's no data from sandboxing
 ```{r}
 d.raw <- read_csv('../data/dataFromMongo.csv') %>%
   filter(!is.na(wID)) %>%
-  filter(wID != '60061239e01afe9652f17412')
+  filter(wID != '60061239e01afe9652f17412') %>%
+  mutate(response = as.numeric(response),
+         normed_response = scale(response),
+         step = ifelse(is.na(count), step, count),
+         source = ifelse(source == 'gibbs', 'GSN', source),
+         source = ifelse(source == 'bert', 'gibbs', source))
 ```
 
 we exclude people who failed the catch trials
 
 ```{r}
-failed_catch_trials <- d.raw %>%
+failed_catch_trial1 <- d.raw %>%
   filter(stimulus_type %in% c('catch1')) %>%
-  mutate(fail = ifelse(stimulus_type == 'catch1', response > 50, response < 50)) %>%
+  mutate(fail = response > 50) %>%
   filter(fail) %>%
   pull(wID) %>%
   unique()
 
+failed_catch_trial2 <- d.raw %>%
+  filter(stimulus_type %in% c('catch2'), iterationName == 'prolific-batch3-full') %>%
+  mutate(fail = response < 50) %>%
+  filter(fail) %>%
+  pull(wID) %>%
+  unique()
+
+
 d <- d.raw %>%
   filter(stimulus_type == 'main_judgement') %>%
   group_by(wID, sent_length) %>%
-  filter(!(wID %in% failed_catch_trials)) %>%
-  mutate(response = as.numeric(response),
-         normed_response = scale(response))
+  filter(!(wID %in% c(failed_catch_trial1, failed_catch_trial2))) 
 
 d %>%
   group_by(step, phase, sent_length, source, prob, prob_class, sentence, sentence_num, id) %>%
@@ -48,8 +59,6 @@ d %>%
   rename(initial_state_prob_class = prob_class) %>%
   unite(sentence_id, sentence_num, id) %>%
   write_csv('../data/averaged_responses.csv')
-
-write_csv(d, '../data/cleaned_data.csv')
 ```
 
 Print some basic properties of our dataset.
@@ -80,10 +89,11 @@ Look at overall naturalness ratings for each sentence type.
 ```{r}
 d %>%
   group_by(sent_length, source) %>%
-  filter(step > 1000 | source != 'bert') %>%
+  filter(phase != 'early') %>%
+  filter(source != 'gibbs') %>%
   tidyboot_mean(as.numeric(response), nboot = 1000, na.rm = F)  %>%
   ungroup() %>%
-  mutate(source = fct_relevel(source, 'wiki', 'bert', 'lstm', 'ngram'),
+  mutate(source = fct_relevel(source, 'wiki', 'GSN', 'gibbs', 'MH', 'lstm', 'ngram'),
          sent_length = fct_relevel(sent_length, 'short', 'medium', 'long')) %>%
   ggplot(aes(x = source, y = empirical_stat, fill = source)) +
     geom_bar(stat = 'identity', position = 'dodge') +
@@ -93,13 +103,13 @@ d %>%
                   color = 'grey40', width = 0) +
     scale_fill_colorblind() +
     ylim(0, 100) +
-    facet_grid(~ sent_length, scales = 'free_x', space = "free_x") +
+    facet_grid(~ sent_length, scales = 'free_x', space = 'free_x') +
     labs(y = "mean naturalness", x = '') +
-    guides(fill = F) +
+    guides(fill = 'none') +
     cowplot::theme_cowplot() +
-    theme(aspect.ratio = 8, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 
-ggsave('./behavioral_means.pdf', width = 4, height = 3.5, units = 'in')
+ggsave('./empirical.pdf', width = 4, height = 3, units = 'in')
 ```
 
 ```{r}
@@ -110,13 +120,12 @@ library(broom.mixed)
 d %>%
   filter(phase != 'early') %>%
   ungroup() %>%
-  mutate(source = fct_relevel(source, 'bert', 'wiki', 'lstm', 'ngram')) %>%
+  mutate(source = fct_relevel(source, 'GSN')) %>%
   mutate(sent_length = fct_relevel(sent_length, 'short')) %>%
-  lmer(response ~ sent_length * source + (1 + sent_length | wID),
-       control = lmerControl(optimizer = 'bobyqa'),
+  lm(response ~ sent_length * source,
        data = .) %>%
+  summary()
   tidy() %>%
-  select(-effect) %>%
   xtable() 
 ```
 
@@ -124,30 +133,30 @@ d %>%
 
 ```{r}
 d %>%
-  filter(source %in% c('bert', 'wiki')) %>%
-  filter(step != 999) %>%
-  mutate(step = ifelse(step > 1000, 0, step)) %>%
+  filter(source %in% c('GSN', 'wiki')) %>%
+  mutate(step = ifelse(phase == 'late', 0, step)) %>%
+  filter(step < 1000) %>%
   group_by(prob_class, sent_length, step, phase, source) %>%
   tidyboot_mean(response, nboot = 100, na.rm = F) %>%
-  group_by( phase, source) %>%
+  group_by(source, phase) %>%
   pivot_wider(names_from = c('source', 'phase'), 
               values_from = c('n', 'mean', 'empirical_stat', 'ci_lower', 'ci_upper')) %>%
   group_by(prob_class, sent_length) %>%
   mutate(empirical_stat_wiki = mean(empirical_stat_wiki_wiki, na.rm = TRUE),
          ci_lower_wiki = mean(ci_lower_wiki_wiki, na.rm = TRUE),
          ci_upper_wiki = mean(ci_upper_wiki_wiki, na.rm = TRUE),
-         ci_lower_bert_late = mean(ci_lower_bert_late, na.rm = TRUE),
-         ci_upper_bert_late = mean(ci_upper_bert_late, na.rm = TRUE),
-         empirical_stat_bert_late = mean(empirical_stat_bert_late, na.rm = TRUE)) %>%
-  ggplot(aes(x = log1p(step), y = empirical_stat_bert_early)) +
+         ci_lower_GSN_late = mean(ci_lower_GSN_late, na.rm = TRUE),
+         ci_upper_GSN_late = mean(ci_upper_GSN_late, na.rm = TRUE),
+         empirical_stat_GSN_late = mean(empirical_stat_GSN_late, na.rm = TRUE)) %>%
+  ggplot(aes(x = log1p(step), y = empirical_stat_GSN_early)) +
     geom_point() +
     facet_grid(prob_class ~ sent_length) +
     geom_hline(aes(yintercept = empirical_stat_wiki), fill = 'green') +
-    geom_errorbar(aes(ymin = ci_lower_bert_early, ymax = ci_upper_bert_early), width = 0) +
+    geom_errorbar(aes(ymin = ci_lower_GSN_early, ymax = ci_upper_GSN_early), width = 0) +
     geom_ribbon(aes(ymin = ci_lower_wiki, ymax = ci_upper_wiki), fill = 'green', alpha = 0.1) +
-    geom_ribbon(aes(ymin = ci_lower_bert_late, ymax = ci_upper_bert_late), alpha = 0.1) +
-    geom_hline(aes(yintercept = empirical_stat_bert_late)) +
-    geom_smooth(method = 'lm', formula = y ~ poly(x,2), se = F, span = 2) +
+    geom_ribbon(aes(ymin = ci_lower_GSN_late, ymax = ci_upper_GSN_late), alpha = 0.1) +
+    geom_hline(aes(yintercept = empirical_stat_GSN_late)) +
+    geom_smooth(method = 'lm',  se = F, span = 2) +
     theme_few()
 
 ggsave('./burn-in.pdf')
