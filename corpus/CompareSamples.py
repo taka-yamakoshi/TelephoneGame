@@ -26,27 +26,6 @@ def ExtractSentProbs(folder_id,folder_path):
     probs = [float(row[head.index('prob_1')]) for row in text]
     return probs
 
-def ExtractFeatures(folder_path,tokenizer,args):
-    with open(f'{folder_path}','r') as f:
-        reader = csv.reader(f)
-        file = [row for row in reader]
-    head = file[0]
-    text = file[1:]
-    probs = [float(row[head.index('prob_1')]) for row in text]
-    sentences = [row[head.index('sentence')] for row in text]
-    args.metric = 'pos'
-    pos_freq,_,sent_num_pos = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
-
-    doc = nlp.pipe(sentences)
-    args.metric = 'tag'
-    tag_freq,_,sent_num_tag = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
-
-    doc = nlp.pipe(sentences)
-    args.metric = 'dep'
-    dep_freq,_,sent_num_dep = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
-    print(len(sentences),sent_num_pos,sent_num_tag,sent_num_dep)
-    return (probs,pos_freq,tag_freq,dep_freq)
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus', type=str, choices=['wiki','book'])
@@ -61,7 +40,7 @@ if __name__ == '__main__':
         text_path = f'{os.environ.get("BOOK_PATH")}/TokenSents/{args.num_tokens}TokenSents/textfile/'
         data_path = f'{os.environ.get("BOOK_PATH")}/TokenSents/{args.num_tokens}TokenSents/datafile/'
 
-    # Extract sent_prob from all Wikipedia sentences with num_tokens = args.num_tokens
+    # Extract sent_prob from all Wikipedia sentences with num_tokens=args.num_tokens
     with open(f'{text_path}SentProbs/sentences.csv','r') as f:
         reader = csv.reader(f)
         file = [row for row in reader]
@@ -71,36 +50,11 @@ if __name__ == '__main__':
     print(prob_all.shape)
     print(prob_all[:10])
 
-
-    '''
-    # Load feature freq of all Wikipedia sentences with num_tokens = args.num_tokens
-    with open(f'{data_path}POSFreqAll.pkl','rb') as f:
-        pos_all = pickle.load(f)
-    with open(f'{data_path}TAGFreqAll.pkl','rb') as f:
-        tag_all = pickle.load(f)
-    with open(f'{data_path}DEPFreqAll.pkl','rb') as f:
-        dep_all = pickle.load(f)
-    '''
-
-    # Extract sent_prob and feature freq from sampled Wikipedia sentences
-    nlp = TokenizerSetUpNew()
-    from transformers import BertTokenizer
-    tokenizer = BertTokenizer.from_pretrained(args.model)
-    from nltk.tokenize import sent_tokenize
-
+    # Extract sent_prob from the sampled sentences
     folder_path_list = glob.glob(f'{text_path}SampledSents/*.csv')
-    arg = [(folder_path,tokenizer,args) for folder_path in folder_path_list]
+    arg = [(folder_id, folder_path) for folder_id,folder_path in enumerate(folder_path_list)]
     with Pool(processes=50) as p:
-        freq_dict_list = p.starmap(ExtractFeatures,arg)
-
-    prob_sample = [line[0] for line in freq_dict_list]
-    '''
-    pos_sample = [line[1] for line in freq_dict_list]
-    tag_sample = [line[2] for line in freq_dict_list]
-    dep_sample = [line[3] for line in freq_dict_list]
-    '''
-
-
+        prob_sample = p.starmap(ExtractSentProbs,arg)
     color_list = sns.color_palette('Set2')
 
     # Compare sent_prob
@@ -115,7 +69,7 @@ if __name__ == '__main__':
     print(diff.argmin())
     print(f'Closest sample: {folder_path_list[diff.argmin()]}')
 
-
+    # Plot the distributions
     fig = plt.figure(dpi=150,figsize=(10,10))
     for probs in prob_sample:
         probs = np.array(probs)
@@ -132,63 +86,3 @@ if __name__ == '__main__':
     plt.xlabel('sentence log likelihood')
     plt.legend()
     fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_sent_prob.png')
-
-
-    # Compare POS
-    fig = plt.figure(dpi=150,figsize=(10,10))
-    pos_list = list(pos_all.keys())
-    print(f'pos_list: {pos_list}')
-    pos_plot_data_all = np.array([pos_all[pos] for pos in pos_list])
-    pos_plot_data_all = pos_plot_data_all/pos_plot_data_all.sum()
-    pos_plot_data_sample = []
-    for sample in pos_sample:
-        plot_data = np.array([sample[pos] if pos in sample else 0 for pos in pos_list])
-        plot_data = plot_data/plot_data.sum()
-        plt.plot(plot_data,color=color_list[0],alpha=0.2)
-        pos_plot_data_sample.append(plot_data)
-    pos_plot_data_sample = np.array(pos_plot_data_sample)
-    plt.plot(pos_plot_data_all,color=color_list[1],label='all')
-    plt.plot(pos_plot_data_sample[diff.argmin()],color=color_list[2],label='closest')
-    plt.xticks(np.arange(len(pos_list)),pos_list,rotation=45)
-    plt.title(f'POS distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
-    plt.xlabel('POS labels')
-    plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_pos.png')
-
-    # Compare TAG
-    fig = plt.figure(dpi=150,figsize=(10,10))
-    tag_list = list(tag_all.keys())
-    print(f'tag_list: {tag_list}')
-    tag_plot_data_all = np.array([tag_all[tag] for tag in tag_list])
-    tag_plot_data_all = tag_plot_data_all/tag_plot_data_all.sum()
-    tag_plot_data_sample = []
-    for sample in tag_sample:
-        plot_data = np.array([sample[tag] if tag in sample else 0 for tag in tag_list])
-        plot_data = plot_data/plot_data.sum()
-        plt.plot(plot_data,color=color_list[0],alpha=0.2)
-        tag_plot_data_sample.append(plot_data)
-    tag_plot_data_sample = np.array(tag_plot_data_sample)
-    plt.plot(tag_plot_data_all,color=color_list[1],label='all')
-    plt.plot(tag_plot_data_sample[diff.argmin()],color=color_list[2],label='closest')
-    plt.xticks(np.arange(len(tag_list)),tag_list,rotation=45)
-    plt.title(f'TAG distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
-    plt.xlabel('TAG labels')
-    plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_tag.png')
-
-    # Compare DEP
-    fig = plt.figure(dpi=150,figsize=(10,10))
-    for sample in dep_sample:
-        plt.scatter(list(sample.keys()),
-                    np.array(list(sample.values()))/np.array(list(sample.values())).sum(),
-                    color=color_list[0],alpha=0.2)
-    plt.scatter(list(dep_all.keys()),
-                np.array(list(dep_all.values()))/np.array(list(dep_all.values())).sum(),
-                color=color_list[1],label='all')
-    plt.scatter(list(dep_sample[diff.argmin()].keys()),
-                np.array(list(dep_sample[diff.argmin()].values()))/np.array(list(dep_sample[diff.argmin()].values())).sum(),
-                color=color_list[2],label='closest')
-    plt.title(f'DEP distribution for {args.num_tokens} token sentences\nChosen sample: {folder_path_list[diff.argmin()].replace(f"{text_path}SampledSents/","")}')
-    plt.xlabel('dependency distance')
-    plt.legend()
-    fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_dep.png')
