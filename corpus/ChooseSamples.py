@@ -12,12 +12,6 @@ import time
 import matplotlib.pyplot as plt
 import math
 
-def ExtractSents(folder_path,sent_ids):
-    with open(f'{folder_path}','r') as f:
-        reader = csv.reader(f)
-        file = [row for row in reader]
-    return (file[0],folder_path,[file[sent_id+1] for sent_id in sent_ids])
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus', type=str, choices=['wiki','book'])

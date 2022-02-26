@@ -1,3 +1,5 @@
+# export WIKI_PATH='YOUR PATH TO WIKICORPUS'
+# export BOOK_PATH='YOUR PATH TO BOOKCORPUS'
 import torch
 import numpy as np
 import pickle
@@ -9,7 +11,9 @@ import glob
 import time
 import matplotlib.pyplot as plt
 import math
-from CountFreq import ExtractFreqNew, TokenizerSetUpNew
+import sys
+sys.path.append('..')
+from analysis.CountFreq import ExtractFreqNew, TokenizerSetUpNew
 import itertools
 import seaborn as sns
 
@@ -32,11 +36,11 @@ def ExtractFeatures(folder_path,tokenizer,args):
     sentences = [row[head.index('sentence')] for row in text]
     args.metric = 'pos'
     pos_freq,_,sent_num_pos = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
-    
+
     doc = nlp.pipe(sentences)
     args.metric = 'tag'
     tag_freq,_,sent_num_tag = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
-    
+
     doc = nlp.pipe(sentences)
     args.metric = 'dep'
     dep_freq,_,sent_num_dep = ExtractFreqNew(sentences,tokenizer,sent_tokenize,nlp,args,verbose=True)
@@ -51,12 +55,12 @@ if __name__ == '__main__':
     parser.add_argument('--model',type=str, default='bert-base-uncased')
     args = parser.parse_args()
     if args.corpus=='wiki':
-        text_path = f'wikicorpus/TokenSents/{args.num_tokens}TokenSents/textfile/'
-        data_path = f'wikicorpus/TokenSents/{args.num_tokens}TokenSents/datafile/'
+        text_path = f'{os.environ.get("WIKI_PATH")}/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        data_path = f'{os.environ.get("WIKI_PATH")}/TokenSents/{args.num_tokens}TokenSents/datafile/'
     elif args.corpus=='book':
-        text_path = f'bookcorpus/TokenSents/{args.num_tokens}TokenSents/textfile/'
-        data_path = f'bookcorpus/TokenSents/{args.num_tokens}TokenSents/datafile/'
-    
+        text_path = f'{os.environ.get("BOOK_PATH")}/TokenSents/{args.num_tokens}TokenSents/textfile/'
+        data_path = f'{os.environ.get("BOOK_PATH")}/TokenSents/{args.num_tokens}TokenSents/datafile/'
+
     # Extract sent_prob from all Wikipedia sentences with num_tokens = args.num_tokens
     with open(f'{text_path}SentProbs/sentences.csv','r') as f:
         reader = csv.reader(f)
@@ -66,7 +70,6 @@ if __name__ == '__main__':
         prob_all = np.array([float(row[head.index('prob_1')]) for row in text])
     print(prob_all.shape)
     print(prob_all[:10])
-    
 
 
     '''
@@ -84,12 +87,12 @@ if __name__ == '__main__':
     from transformers import BertTokenizer
     tokenizer = BertTokenizer.from_pretrained(args.model)
     from nltk.tokenize import sent_tokenize
-    
+
     folder_path_list = glob.glob(f'{text_path}SampledSents/*.csv')
     arg = [(folder_path,tokenizer,args) for folder_path in folder_path_list]
     with Pool(processes=50) as p:
         freq_dict_list = p.starmap(ExtractFeatures,arg)
-    
+
     prob_sample = [line[0] for line in freq_dict_list]
     '''
     pos_sample = [line[1] for line in freq_dict_list]
@@ -97,9 +100,9 @@ if __name__ == '__main__':
     dep_sample = [line[3] for line in freq_dict_list]
     '''
 
-    
+
     color_list = sns.color_palette('Set2')
-    
+
     # Compare sent_prob
     binned_prob_all,_ = np.histogram(prob_all,bins=np.arange(math.floor(np.min(prob_all)),0),density=True)
     binned_prob_sample = []
@@ -111,7 +114,7 @@ if __name__ == '__main__':
     print(diff)
     print(diff.argmin())
     print(f'Closest sample: {folder_path_list[diff.argmin()]}')
-    
+
 
     fig = plt.figure(dpi=150,figsize=(10,10))
     for probs in prob_sample:
@@ -130,7 +133,7 @@ if __name__ == '__main__':
     plt.legend()
     fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_sent_prob.png')
 
-    
+
     # Compare POS
     fig = plt.figure(dpi=150,figsize=(10,10))
     pos_list = list(pos_all.keys())
@@ -151,7 +154,7 @@ if __name__ == '__main__':
     plt.xlabel('POS labels')
     plt.legend()
     fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_pos.png')
-    
+
     # Compare TAG
     fig = plt.figure(dpi=150,figsize=(10,10))
     tag_list = list(tag_all.keys())
@@ -172,7 +175,7 @@ if __name__ == '__main__':
     plt.xlabel('TAG labels')
     plt.legend()
     fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_tag.png')
-    
+
     # Compare DEP
     fig = plt.figure(dpi=150,figsize=(10,10))
     for sample in dep_sample:
@@ -189,14 +192,3 @@ if __name__ == '__main__':
     plt.xlabel('dependency distance')
     plt.legend()
     fig.savefig(f'figures/sample_comparison_{args.corpus}_{args.num_tokens}_dep.png')
-
-    '''
-    # Perform statistical test using area_between_curves?
-    from similaritymeasures import area_between_two_curves
-    assert len(np.arange(math.floor(np.min(prob_all)),0))-1==len(binned_prob_all)
-    area_sent_prob = np.array([area_between_two_curves(np.array([np.arange(math.floor(np.min(prob_all)),0)[:-1],binned_prob]).T,
-                                                       np.array([np.arange(math.floor(np.min(prob_all)),0)[:-1],binned_prob_all]).T
-                                                      ) for binned_prob in binned_prob_sample])
-    print(area_sent_prob)
-    '''
-    
