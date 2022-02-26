@@ -11,7 +11,9 @@ import glob
 import time
 import matplotlib.pyplot as plt
 import math
-from bert_new import UniformGibbs
+import sys
+sys.path.append('..')
+from model/bert import UniformGibbs
 
 def CalcSentProb(folder_path,text_path,args):
     folder_name = folder_path.replace(text_path,'').replace('.txt','')
@@ -83,7 +85,6 @@ if __name__ == '__main__':
     model.to(args.device)
     model.eval()
     args.mask_id = bert_tokenizer.encode("[MASK]")[1:-1][0]
-
     args.sweep_order = 'random'
 
     if args.corpus=='wiki':
