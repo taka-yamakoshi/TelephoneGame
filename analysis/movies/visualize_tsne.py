@@ -3,11 +3,9 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer('paraphrase-distilroberta-base-v1')
-#chain = (pd.read_csv('../data/21TokenSentsAll/bert_new_gibbs_mixture_0.001_input_1.csv')
-chain = (pd.read_csv('../data/12TokenSentsMH/bert_new_mh_1_random_sweep_input_1.csv')
-         .query("chain_num == 0 and sentence_num in [2,6]"))
-sentences = chain['sentence'].str.replace(r'\[CLS\] ', '').str.replace(r' \[SEP\]', '').tolist()
-sentence_embeddings = model.encode(sentences, show_progress_bar=False)
+chain = pd.read_csv('sample_sentences.csv')
+chain = chain.assign(cleaned_sentence=chain.sentence.str.replace(r'\[CLS\] ', '',regex=True).str.replace(r' \[SEP\]', '',regex=True))
+sentence_embeddings = model.encode(chain.cleaned_sentence.to_list(), show_progress_bar=False)
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
