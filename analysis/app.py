@@ -28,7 +28,7 @@ def load_model(model_name):
 
 @st.cache(show_spinner=False)
 def load_data(sentence_num):
-    df = pd.read_csv('tsne_out.csv')
+    df = pd.read_csv('movies/tsne_out.csv')
     df = df.loc[lambda d: (d['sentence_num']==sentence_num)&(d['iter_num']<1000)]
     return df
 
