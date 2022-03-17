@@ -134,8 +134,10 @@ if __name__ == '__main__':
                         help='epsilon when using gibbs_mixture')
     parser.add_argument('--sweep_order', type=str,
                         choices=['ascend','descend','random_sweep','random'])
-    parser.add_argument('--adjacent_block', dest='adjacent_block', action='store_true', default=False)
-    parser.add_argument('--mask_initialization', dest='mask_initialization', action='store_true', default=False)
+    parser.add_argument('--adjacent_block', dest='adjacent_block', action='store_true', default=False,
+                        help='whether you sample consecutive sites for the multi-site MH')
+    parser.add_argument('--mask_initialization', dest='mask_initialization', action='store_true', default=False,
+                        help='initialize with masks')
     args = parser.parse_args()
 
     if args.corpus=='bert':
