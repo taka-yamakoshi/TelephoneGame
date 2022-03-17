@@ -1,19 +1,17 @@
 # Analysis
 
-This directory contains several R Notebooks and scripts to reproduce our analysis workflow.
+## Subdirectories
 
-* `chain_analytics.Rmd` checks convergence and auto-correlation of the Gibbs & MH chains
-* `corpus_comparison.Rmd` examines the extent to which samples generated from BERT match statistics of its training corpus
-* `behavioral_experiment.Rmd` analyses the sentence judgements provided by human participants
-  * `gen_stims.Rmd` was used to select balanced sets of sentences to show to participants 
+The sub directory `RNotebooks` contains the R notebooks for running analyses and producing figures.
+The sub directory `demo` contains scripts for creating the demo video and the interactive webpage.
 
 ## Computing corpus features
 
-Our corpus distribution analyses rely on computing different metrics on different corpora. These are extracted by `CountFreq.py`.
+`CountFreq.py` extracts different linguistic features (POS/TAG/DEP etc.) for different corpora.
 
 First, set the environment variables for wikipedia, bookcorpus, or BERT data.
 
-For example,
+For example, set `WIKI_PATH` to be the path to the wikipedia corpus
 ```{python3}
 export WIKI_PATH='YOUR PATH TO WIKICORPUS'
 ```
@@ -29,11 +27,11 @@ or for wikipedia/bookcorpus
 python CountFreq.py --corpus wiki --num_tokens 21 --metric $METRIC
 ```
 
-`metric` is the type of linguistic feature to count.  The options include `pos` (parts of speech), `tag` (detailed parts of speech tag), `dep` (dependency label) and `dep_dist` (dependency distance: the sum of distances between the head and the child for each sentence).
+`metric` is the type of linguistic feature to count.  The options include `pos` (parts of speech), `tag` (detailed parts of speech tag), `dep` (dependency label) and `dep_dist` (dependency distance: the sum of distances between the head and the child for each sentence).  In order to ensure independent samples, we extract samples from chains with lags (please see Sec. 3.2 of the paper for details).  `sent_sample` specifies this lag, and the value we used was 500 (sweeps).
 
-This will add `datafile` directory inside the corresponding corpus directory.
+Running `CountFreq.py` will add `datafile` directory inside the corresponding corpus directory.
 
-Example: for BERT data,
+Example: for the BERT data,
 ```
 +-- BERT_PATH
 | +-- ...
@@ -48,3 +46,7 @@ Example: for BERT data,
 | +-- 21TokenSents
 | +-- ...
 ```
+
+## Extracting linguistic features for sentences used in the behavioral experiment
+
+`ExtractLingFeatures.py` reads in the result of the behavioral experiment and creates a csv file containing linguistic features, which we used when predicting naturalness ratings.
