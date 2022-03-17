@@ -1,9 +1,9 @@
-# Probing BERT's priors with serial reproduction chains
+# Probing BERT's priors with serial reproduction chains (Findings of ACL)
 
-![frontfig](https://user-images.githubusercontent.com/5262024/158881827-cb8544ef-3aff-4be6-be20-b69168d7574b.svg)
+<img src="https://user-images.githubusercontent.com/5262024/158881827-cb8544ef-3aff-4be6-be20-b69168d7574b.svg" width="250">
 
-[ArXiv pre-print](https://arxiv.org/abs/2202.12226)
-[Interactive demo](https://huggingface.co/spaces/taka-yamakoshi/bert-priors-demo). 
+* [ArXiv pre-print](https://arxiv.org/abs/2202.12226)
+* [Interactive demo](https://huggingface.co/spaces/taka-yamakoshi/bert-priors-demo)
 
 ## Repository organization
 
