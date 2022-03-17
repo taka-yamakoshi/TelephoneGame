@@ -1,6 +1,6 @@
 # Probing BERT's priors with serial reproduction chains
 
-[frontfig.pdf](https://github.com/taka-yamakoshi/TelephoneGame/files/8289915/frontfig.pdf)
+![frontfig](https://user-images.githubusercontent.com/5262024/158881556-c7ab4eb1-6ad0-4ae7-ad9d-2867b9cce5e5.svg)
 
 [ArXiv pre-print](https://arxiv.org/abs/2202.12226)
 [Interactive demo](https://huggingface.co/spaces/taka-yamakoshi/bert-priors-demo). 
