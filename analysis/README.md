@@ -31,20 +31,21 @@ python CountFreq.py --corpus wiki --num_tokens 21 --metric $METRIC
 
 Running `CountFreq.py` will add `datafile` directory inside the corresponding corpus directory.
 
-Example: for the BERT data,
+For example, for the BERT data,
 ```
-+-- BERT_PATH
-| +-- ...
-| +-- 11TokenSents: bert sentences generated with 11 tokens
-|   +-- textfile
-|   +-- datafile
-|     +-- bert-base-uncased: model name
-|       +-- 5_51000_500_gibbs_mixture_random_mask_init_1: paramters for the generated sentences
-|         +-- POSFreqAllBert.pkl: output files from `CountFreq.py`
-|         +-- ...
-| +-- 12TokenSents
-| +-- 21TokenSents
-| +-- ...
+└── BERT_PATH
+    ├── ...
+    ├── 11TokenSents: bert sentences generated with 11 tokens
+    │   ├── textfile
+    │   └── datafile
+    │       └── bert-base-uncased: model name
+    │           └── 5_51000_500_gibbs_mixture_random_mask_init_1: paramters for the generated sentences
+    │               ├── POSFreqAllBert.pkl: output files from `CountFreq.py`
+    │               ├── TAGFreqAllBert.pkl: output files from `CountFreq.py`
+    │               └── ...
+    ├── 12TokenSents
+    ├── 21TokenSents
+    └── ...
 ```
 
 ## Extracting linguistic features for sentences used in the behavioral experiment
