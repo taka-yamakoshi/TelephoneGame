@@ -1,9 +1,9 @@
 # Analysis
 
-## Subdirectories
+## RNotebooks and demo
 
-The sub directory `RNotebooks` contains the R notebooks for running analyses and producing figures.
-The sub directory `demo` contains scripts for creating the demo video and the interactive webpage.
+The sub-directory `RNotebooks` contains the R notebooks for running analyses and producing figures.
+The sub-directory `demo` contains scripts for creating the demo video and the interactive webpage.
 
 ## Computing corpus features
 
