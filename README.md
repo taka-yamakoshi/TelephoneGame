@@ -1,6 +1,6 @@
 # Probing BERT's priors with serial reproduction chains (Findings of ACL)
 
-<img src="https://user-images.githubusercontent.com/5262024/158881827-cb8544ef-3aff-4be6-be20-b69168d7574b.svg" width="250">
+<img src="https://user-images.githubusercontent.com/60325582/159703554-90b91ef7-57cd-4d2d-a1f1-f825285a028d.png" width="300">
 
 * [ArXiv pre-print](https://arxiv.org/abs/2202.12226)
 * [Interactive demo](https://huggingface.co/spaces/taka-yamakoshi/bert-priors-demo)
