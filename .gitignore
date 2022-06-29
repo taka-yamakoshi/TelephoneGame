@@ -1,1 +1,10 @@
 .DS_Store
+*.html
+node_modules
+*.zip
+*.pkl
+*.mp4
+*.csv
+*.nb.html
+*~
+.Rproj.user
