@@ -16,14 +16,14 @@ db = conn['telephone-game']
 
 # get stimuli collection from this database
 print('possible collections include: ', db.collection_names())
-stim_coll = db['stimuli']
+stim_coll = db['stimuli-batch3-mh']
 
 # empty stimuli collection if already exists
 # (note this destroys records of previous games)
 if stim_coll.count() != 0 :
     stim_coll.drop()
 
-dataset = pd.read_csv('./stimuli/grouped_stims_for_mongo_cleaned.csv')
+dataset = pd.read_csv('../data/stimuli/second_run/grouped_stims.csv')
 
 for group_name, group in dataset.groupby('group_id') :
     trials = []

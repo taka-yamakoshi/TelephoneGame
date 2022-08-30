@@ -146,7 +146,7 @@ function initializeWithTrials(socket) {
   sendPostRequest('http://localhost:6004/db/getstims', {
     json: {
       dbname: 'telephone-game',
-      colname: 'stimuli-batch2',
+      colname: 'stimuli-batch3-mh',
       gameid: gameid
     }
   }, (error, res, body) => {

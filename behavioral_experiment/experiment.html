@@ -6,6 +6,7 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lodash@4.17.10/lodash.min.js"></script>
     <script src="jsPsych/jspsych.js"></script>
     <script src="jsPsych/plugins/jspsych-instructions.js"></script>
+    <script src="jsPsych/plugins/jspsych-preload.js"></script>    
     <script src="jsPsych/plugins/jspsych-html-button-response.js"></script>
     <script src="jsPsych/plugins/jspsych-html-slider-response.js"></script>
     <script src="jsPsych/plugins/jspsych-survey-text.js"></script>
@@ -30,7 +31,7 @@
         Thank you for accepting this task! \
 	This research is being conducted by Takateru Yamakoshi, an undergraduate student, \
         Robert Hawkins, a postdoctoral researcher, and Tom Griffiths, a faculty member at Princeton \
-        University. This study takes approximately 5 minutes to complete.</p> \
+        University. This study takes approximately 10 minutes to complete.</p> \
         <br> \
         <p style='width:50%;margin:auto' align='left'>If you agree to take part in the research, you will make a series \
         of judgments about sentences. You will be presented with information displayed as text and \
@@ -70,10 +71,13 @@
     
     function setupGame () {
       var socket = io.connect();
-      var timeline = [];
+      var timeline = [{
+	type: 'preload',
+        images: ['slider_middle_agreement.png', 'slider_high_agreement.png']
+      }];
 
       // Values fixed for human experiments.
-      var iterationName = 'prolific-pilot0'
+      var iterationName = 'prolific-batch3-full'
       var sliderWidthScale = 0.5
       var maxQuizAttempts = 3
 
@@ -95,7 +99,7 @@
         var ready_screen = {
           type: "instructions",
           pages : ["<p align=left style='width:500px;margin:auto'>\
-                     We are interested in your intuitions about the English language! Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird. Then again, people sometimes write weird-sounding sentences, too! In this study, we will show you some sentences written by computers and humans and ask you to rate how natural they sound.</p>",
+                     We are interested in your intuitions about the English language! Computers are getting better and better at producing natural-sounding language, but sometimes they still sound a little weird. Then again, people sometimes write weird-sounding sentences, too! In this study, we will show you some sentences and ask you to rate how natural they sound.</p>",
                    "<p align=left style='width:500px;margin:auto'>\
                       On each screen, you will see a single sentence at the top and a slider at the bottom.\
                       The slider ranges from 'Not natural at all' to 'Completely natural'.  \
@@ -119,9 +123,9 @@
                       In this case, you would position the slider closer to the left! Please keep in mind, however, that many cases will not be clear, and different sentences\
                       may sound more or less natural to different people, so just think hard and tell us what you think!</p>",
                    "<p align=left style='width:500px;margin:auto'>\
-                    You will receive a completion bonus of $1.00 if you make careful judgements for all 25 sentences. \
+                    You will receive a completion bonus of $1.00 if you make careful judgements for all sentences. \
                     We will closely monitor your responses and may terminate the study early with no completion bonus \
-                    if we detect anomalies in your behavior suggesting that you are not reading carefully.</p>",
+                    if we detect anomalies in your behavior suggesting that you are not reading carefully. Note that in this case, you will still receive the base compensation for your time.</p>",
                    "<p align=left style='width:500px;margin:auto'>\
                     Before we begin, you must complete a short quiz to \
                     show that you understand the task. You must pass the quiz within \
@@ -218,11 +222,12 @@
         timeline.push(if_passed_node);
         timeline.push(if_failed_node);
 	
-        _.forEach(trials, function(trial) {
+        _.forEach(trials, function(trial, i) {
           var sentence_stimulus = "\
             <div style='margin:auto;width:500px'>\
-              <p style='text-align:center'>How natural does this sentence sound?<br></p>\
-              <p><b>" + trial.sentence + "</b></p>\
+              <p style='text-align:left'>" + (trials.length - i) + " of " + (trials.length) + " sentences remaining.<br></p>\
+              <p style='text-align:left'>How natural does this sentence sound?<br></p>\
+              <p style='text-align:left'><b>" + trial.sentence + "</b></p>\
             </div>";
           timeline.push({
             type: "html-slider-response",
@@ -236,37 +241,6 @@
 	    })
           });
         })
-
-        var catch_stimulus1 = "\
-          <div style='margin:auto;width:500px'>\
-            <p style='text-align:center'>How natural does this sentence sound?<br></p>\
-            <p><b>The man cake of slice ate a.</b></p>\
-          </div>";
-
-	var catch_stimulus2 = "\
-          <div style='margin:auto;width:500px'>\
-            <p style='text-align:center'>How natural does this sentence sound?<br></p>\
-            <p><b>The woman a ball him kickered.</b></p>\
-          </div>";
-
-        var catch_trial1 = {
-          type: "html-slider-response",
-          stimulus: catch_stimulus1,
-          prompt: "",
-          labels: ['Very weird', 'Very natural'],
-          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
-          require_movement: true,
-          data: {'stimulus_type': 'catch1', 'highValueMeans' : 'error' }
-        };
-        var catch_trial2 = {
-          type: "html-slider-response",
-          stimulus: catch_stimulus2,
-          prompt: "",
-          labels: ['Very weird', 'Very natural'],
-          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
-          require_movement: true,
-          data: {'stimulus_type': 'catch2', 'highValueMeans' : 'error' }
-        };
         var catch_failed_node = {
           timeline: [{
             type: 'html-button-response',
@@ -295,11 +269,42 @@
 
         // Put one catch trial in trials 1-12
         var catch_trial_index1 = timeline.length - Math.floor(Math.random()*(12)) - 12;
+	var catch_stimulus1 = "\
+          <div style='margin:auto;width:500px'>\
+              <p style='text-align:left'>" + (timeline.length - catch_trial_index1) + " of " + (trials.length) + " sentences remaining.<br></p>\
+              <p style='text-align:left'>How natural does this sentence sound?<br></p>\
+            <p><b>The man cake of slice ate a.</b></p>\
+          </div>";
+        var catch_trial1 = {
+          type: "html-slider-response",
+          stimulus: catch_stimulus1,
+          prompt: "",
+          labels: ['Very weird', 'Very natural'],
+          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
+          require_movement: true,
+          data: {'stimulus_type': 'catch1', 'highValueMeans' : 'error' }
+        };
+
 	timeline.splice(catch_trial_index1, 0, catch_trial1)
         timeline.splice(catch_trial_index1+1, 0, catch_failed_node)
 	
         // Put another catch trial in trials 13-25
         var catch_trial_index2 = timeline.length - Math.floor(Math.random()*(12));
+	var catch_stimulus2 = "\
+          <div style='margin:auto;width:500px'>\
+              <p style='text-align:left'>" + (timeline.length - catch_trial_index2) + " of " + (trials.length) + " sentences remaining.<br></p>\
+              <p style='text-align:left'>How natural does this sentence sound?<br></p>\
+            <p><b>The boy kicked a ball to his friend.</b></p>\
+          </div>";
+	var catch_trial2 = {
+          type: "html-slider-response",
+          stimulus: catch_stimulus2,
+          prompt: "",
+          labels: ['Very weird', 'Very natural'],
+          slider_width: Math.min(sliderWidthScale * window.innerWidth, 500),
+          require_movement: true,
+          data: {'stimulus_type': 'catch2', 'highValueMeans' : 'correct' }
+        };
 	timeline.splice(catch_trial_index2, 0, catch_trial2)
 	timeline.splice(catch_trial_index2+1, 0, catch_failed_node)
 
@@ -339,7 +344,7 @@
             // At the end of the experiment, submit to turk
             // Record number of quiz attempts
             //jsPsych.turk.submitToTurk({'bonus': '1.00'});
-            window.location.replace("https://app.prolific.co/submissions/complete?cc=44645224")
+            window.location.replace("https://app.prolific.co/submissions/complete?cc=8B150B6A")
           },
           on_trial_finish: function(trialData) {
             // At the end of each trial, send data to server
